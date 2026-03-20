@@ -1,6 +1,6 @@
-# flutter_app
+# ReyesCompany
 
-A new Flutter project.
+Sistema de inventario y ventas (SIV).
 
 ## Getting Started
 

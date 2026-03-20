@@ -40,7 +40,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   int _moduloActivo = 0;
   late String? _sucursalSeleccionada;
 
-  // Nav filtrado por rol: empleado solo ve Inicio, Ventas y Clientes
+  // Menú de navegación según el rol
   List<_NavItem> get _nav {
     final esAdmin = widget.usuario.rol == 'Administrador';
     return [
@@ -52,11 +52,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
     ];
   }
 
-  // Índice real del módulo según rol (el índice en nav cambia si se ocultan items)
   int _indexParaModulo(int moduloReal) {
     final esAdmin = widget.usuario.rol == 'Administrador';
-    if (esAdmin) return moduloReal; // Admin: índices 0,1,2,3,4
-    // Empleado: Inicio=0, Ventas=1, Clientes=2 (Inventario y Usuarios no existen)
+    if (esAdmin) return moduloReal;
     if (moduloReal == 0) return 0;
     if (moduloReal == 1) return 1;
     if (moduloReal == 3) return 2;
@@ -66,7 +64,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
   int _moduloRealDesdeIndex(int navIndex) {
     final esAdmin = widget.usuario.rol == 'Administrador';
     if (esAdmin) return navIndex;
-    // Empleado: navIndex 0→inicio, 1→ventas, 2→clientes
     switch (navIndex) {
       case 0: return 0;
       case 1: return 1;
@@ -242,8 +239,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Widget _contenido() {
-    // Usuario con sucursal asignada → SIEMPRE su sucursal, no puede cambiar
-    // Admin global → usa el selector (_sucursalSeleccionada puede ser null = todas)
     final String? sucFiltro = widget.usuario.esAdminGlobal
         ? _sucursalSeleccionada
         : widget.usuario.idSucursal;
@@ -339,10 +334,10 @@ class _ModuloInicioState extends State<ModuloInicio> {
   Widget build(BuildContext context) {
     if (_cargando) return const Center(child: CircularProgressIndicator(color: _cAccent));
 
-    final totalVentas   = _num("total_ventas");    // Solo contado
-    final totalAbonos   = _num("total_abonos");    // Cobros de deudas
-    final totalDia      = _num("total_dia");       // Contado + Abonos
-    final totalFiados   = _num("total_fiados_hoy");// Deuda generada hoy
+    final totalVentas   = _num("total_ventas");
+    final totalAbonos   = _num("total_abonos");
+    final totalDia      = _num("total_dia");
+    final totalFiados   = _num("total_fiados_hoy");
     final cantVentas    = _int("cantidad_ventas");
     final cantAbonos    = _int("cantidad_abonos");
     final cantFiados    = _int("cantidad_fiados_hoy");
@@ -418,18 +413,18 @@ class _ModuloInicioState extends State<ModuloInicio> {
           const SizedBox(height: 22),
 
           if (metodos.isNotEmpty) ...[
-            _labelSeccion('Desglose por método de pago (contado)'),
+            const Text('Desglose por método de pago', style: TextStyle(color: _cText, fontSize: 14, fontWeight: FontWeight.w700)),
             const SizedBox(height: 10),
             _cardMetodos(metodos, totalVentas),
             const SizedBox(height: 22),
           ],
 
           Row(children: [
-            _labelSeccion('Movimientos del día'),
+            const Text('Movimientos del día', style: TextStyle(color: _cText, fontSize: 14, fontWeight: FontWeight.w700)),
             const Spacer(),
             Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(color: _cAccent.withOpacity(0.08), borderRadius: BorderRadius.circular(20)),
-                child: Text('${movimientos.length} registro${movimientos.length != 1 ? "s" : ""}',
+                child: Text('${movimientos.length} registros',
                     style: const TextStyle(fontSize: 11, color: _cAccent, fontWeight: FontWeight.w600))),
           ]),
           const SizedBox(height: 10),
@@ -499,7 +494,7 @@ class _ModuloInicioState extends State<ModuloInicio> {
         const SizedBox(height: 6),
         Row(children: [
           Icon(Icons.people_alt_rounded, size: 13, color: hayDeuda ? _cOrange : _cSubtext), const SizedBox(width: 5),
-          Text('$clientes cliente${clientes != 1 ? "s" : ""} con deuda', style: TextStyle(color: hayDeuda ? _cOrange : _cSubtext, fontSize: 12)),
+          Text('$clientes clientes deben', style: TextStyle(color: hayDeuda ? _cOrange : _cSubtext, fontSize: 12)),
         ]),
       ]),
     );
@@ -520,8 +515,7 @@ class _ModuloInicioState extends State<ModuloInicio> {
       Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         const Text('Fiados hoy', style: TextStyle(color: _cSubtext, fontSize: 12)),
         Text('\$${_fmt(total)}', style: const TextStyle(color: _cRed, fontSize: 20, fontWeight: FontWeight.w800)),
-        Text('$cantidad venta${cantidad != 1 ? "s" : ""} a crédito · no es dinero recibido',
-            style: const TextStyle(color: _cSubtext, fontSize: 10)),
+        Text('$cantidad ventas a crédito', style: const TextStyle(color: _cSubtext, fontSize: 10)),
       ])),
     ]),
   );
@@ -556,7 +550,7 @@ class _ModuloInicioState extends State<ModuloInicio> {
             Container(padding: const EdgeInsets.all(7), decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(8)), child: Icon(_iconoMetodo(m["metodo"]?.toString() ?? ""), color: color, size: 14)),
             const SizedBox(width: 10),
             Expanded(child: Text(m["metodo"]?.toString() ?? "", style: const TextStyle(color: _cText, fontWeight: FontWeight.w600, fontSize: 13))),
-            Text('$cant venta${cant != 1 ? "s" : ""}', style: const TextStyle(color: _cSubtext, fontSize: 11)),
+            Text('$cant ventas', style: const TextStyle(color: _cSubtext, fontSize: 11)),
             const SizedBox(width: 12),
             Text('\$${_fmt(sub)}', style: TextStyle(color: color, fontWeight: FontWeight.w700, fontSize: 14)),
           ]),
@@ -585,15 +579,9 @@ class _ModuloInicioState extends State<ModuloInicio> {
         final titulo  = esVenta ? "Venta #${(m["id"] as String?)?.substring(0, 6) ?? ""}" : "Abono";
         final metodo  = m["metodo"]?.toString() ?? "";
         final cliente = m["nombre_cliente"]?.toString() ?? "";
-        final usuario = m["usuario"]?.toString() ?? "";
-        final sucursal = m["sucursal"]?.toString() ?? "";
-        final obs     = m["observacion"]?.toString() ?? "";
         final partes  = <String>[];
         if (cliente.isNotEmpty && cliente != 'Contado') partes.add(cliente);
         if (metodo.isNotEmpty && metodo != 'Abono') partes.add(metodo);
-        if (usuario.isNotEmpty) partes.add(usuario);
-        if (sucursal.isNotEmpty) partes.add(sucursal);
-        if (obs.isNotEmpty) partes.add(obs);
 
         return Column(children: [
           Container(
@@ -608,7 +596,7 @@ class _ModuloInicioState extends State<ModuloInicio> {
                   const SizedBox(width: 7),
                   Container(padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
                       decoration: BoxDecoration(color: color.withOpacity(0.08), borderRadius: BorderRadius.circular(6)),
-                      child: Text(esVenta ? (metodo.isNotEmpty ? metodo : 'Venta') : 'Abono', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: color, letterSpacing: 0.2))),
+                      child: Text(esVenta ? (metodo.isNotEmpty ? metodo : 'Venta') : 'Abono', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: color))),
                 ]),
                 if (partes.isNotEmpty) Text(partes.join(' · '), style: const TextStyle(color: _cSubtext, fontSize: 11), overflow: TextOverflow.ellipsis),
               ])),
@@ -632,8 +620,6 @@ class _ModuloInicioState extends State<ModuloInicio> {
       const Text('Las ventas y abonos del día aparecerán aquí', style: TextStyle(color: _cSubtext, fontSize: 12)),
     ]),
   );
-
-  Widget _labelSeccion(String t) => Text(t, style: const TextStyle(color: _cText, fontSize: 14, fontWeight: FontWeight.w700));
 
   Color _colorMetodo(String n) {
     switch (n.toLowerCase()) {
