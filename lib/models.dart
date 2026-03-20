@@ -1,4 +1,6 @@
-// Modelos para manejar los datos del sistema
+// ══════════════════════════════════════════════════════
+//  models.dart — ReyesCompany SIV v3.0 Realtime DB
+// ══════════════════════════════════════════════════════
 
 enum TipoVenta { contado, fiado }
 
@@ -8,62 +10,80 @@ extension TipoVentaExt on TipoVenta {
       s.toLowerCase() == 'fiado' ? TipoVenta.fiado : TipoVenta.contado;
 }
 
-// Clase para las categorias de los productos
-class Categoria {
-  int _idCategoria;
+// ── Sucursal ──────────────────────────────────────────
+class Sucursal {
+  final String _id;
   String _nombre;
+  String _direccion;
+  String _telefono;
+  bool _activa;
 
-  Categoria({required int idCategoria, required String nombre})
-      : _idCategoria = idCategoria,
-        _nombre = nombre;
+  Sucursal({required String id, required String nombre, String direccion = '', String telefono = '', bool activa = true})
+      : _id = id, _nombre = nombre, _direccion = direccion, _telefono = telefono, _activa = activa;
 
-  factory Categoria.fromJson(Map<String, dynamic> j) => Categoria(
-    idCategoria: int.tryParse(j['id_categoria'].toString()) ?? 0,
-    nombre: j['nombre'] ?? '',
+  factory Sucursal.fromMap(String id, Map<String, dynamic> d) => Sucursal(
+    id: id, nombre: d['nombre'] ?? '', direccion: d['direccion'] ?? '',
+    telefono: d['telefono'] ?? '', activa: d['estado'] ?? true,
   );
 
-  int get idCategoria => _idCategoria;
-  String get nombre => _nombre;
-  set nombre(String v) => _nombre = v;
+  String get idSucursal => _id;
+  String get nombre     => _nombre;
+  String get direccion  => _direccion;
+  String get telefono   => _telefono;
+  bool   get activa     => _activa;
+  set nombre(String v)  => _nombre = v;
 
-  Map<String, dynamic> toJson() => {'id_categoria': _idCategoria, 'nombre': _nombre};
+  @override
+  String toString() => _nombre;
 }
 
-// Clase para los metodos de pago como efectivo o nequi
+// ── Categoria ─────────────────────────────────────────
+class Categoria {
+  final String _id;
+  String _nombre;
+
+  Categoria({required String id, required String nombre}) : _id = id, _nombre = nombre;
+
+  factory Categoria.fromMap(String id, Map<String, dynamic> d) =>
+      Categoria(id: id, nombre: d['nombre'] ?? '');
+
+  String get idCategoria => _id;
+  String get nombre      => _nombre;
+  set nombre(String v)   => _nombre = v;
+}
+
+// ── MetodoPago ────────────────────────────────────────
 class MetodoPago {
-  int _idMetodoPago;
+  final String _id;
   String _nombre;
   bool _activo;
 
-  MetodoPago({required int idMetodoPago, required String nombre, required bool activo})
-      : _idMetodoPago = idMetodoPago,
-        _nombre = nombre,
-        _activo = activo;
+  MetodoPago({required String id, required String nombre, required bool activo})
+      : _id = id, _nombre = nombre, _activo = activo;
 
+  factory MetodoPago.fromMap(String id, Map<String, dynamic> d) =>
+      MetodoPago(id: id, nombre: d['nombre'] ?? '', activo: d['activo'] ?? true);
+
+  // Compatibilidad con código existente
   factory MetodoPago.fromJson(Map<String, dynamic> j) => MetodoPago(
-    idMetodoPago: int.tryParse(j['id_metodo_pago'].toString()) ?? 0,
+    id:     j['id']?.toString() ?? j['id_metodo_pago']?.toString() ?? '',
     nombre: j['nombre'] ?? '',
-    activo: (int.tryParse(j['activo'].toString()) ?? 1) == 1,
+    activo: j['activo'] is bool ? j['activo'] : ((j['activo'] as int?) ?? 1) == 1,
   );
 
-  int get idMetodoPago => _idMetodoPago;
-  String get nombre => _nombre;
-  bool get activo => _activo;
-  set nombre(String v) => _nombre = v;
-
-  void activar() => _activo = true;
-  void desactivar() => _activo = false;
-
-  Map<String, dynamic> toJson() => {'id_metodo_pago': _idMetodoPago, 'nombre': _nombre, 'activo': _activo ? 1 : 0};
+  String get idMetodoPago => _id;
+  String get nombre       => _nombre;
+  bool   get activo       => _activo;
+  void activar()          => _activo = true;
+  void desactivar()       => _activo = false;
 }
 
-// Clase para la informacion de los productos
+// ── Producto ──────────────────────────────────────────
 class Producto {
-  int _idProducto;
-  String _codigo;
+  final String _id;
   String _nombre;
   String _descripcion;
-  int _idCategoria;
+  String _idCategoria;
   String _categoriaNombre;
   double _precioCompra;
   double _precioVenta;
@@ -71,264 +91,234 @@ class Producto {
   int _stockMinimo;
 
   Producto({
-    required int idProducto,
-    required String codigo,
+    required String id,
     required String nombre,
-    required String descripcion,
-    required int idCategoria,
-    required String categoriaNombre,
+    String descripcion = '',
+    required String idCategoria,
+    String categoriaNombre = '',
     required double precioCompra,
     required double precioVenta,
     required int stockActual,
     required int stockMinimo,
-  })  : _idProducto = idProducto,
-        _codigo = codigo,
-        _nombre = nombre,
-        _descripcion = descripcion,
-        _idCategoria = idCategoria,
+  })  : _id             = id,
+        _nombre         = nombre,
+        _descripcion    = descripcion,
+        _idCategoria    = idCategoria,
         _categoriaNombre = categoriaNombre,
-        _precioCompra = precioCompra,
-        _precioVenta = precioVenta,
-        _stockActual = stockActual,
-        _stockMinimo = stockMinimo;
+        _precioCompra   = precioCompra,
+        _precioVenta    = precioVenta,
+        _stockActual    = stockActual,
+        _stockMinimo    = stockMinimo;
 
-  factory Producto.fromJson(Map<String, dynamic> j) => Producto(
-    idProducto: int.tryParse(j['id_producto'].toString()) ?? 0,
-    codigo: j['codigo'] ?? '',
-    nombre: j['nombre'] ?? '',
-    descripcion: j['descripcion'] ?? '',
-    idCategoria: int.tryParse(j['id_categoria'].toString()) ?? 0,
-    categoriaNombre: j['categoria_nombre'] ?? '',
-    precioCompra: double.tryParse(j['precio_compra'].toString()) ?? 0,
-    precioVenta: double.tryParse(j['precio_venta'].toString()) ?? 0,
-    stockActual: int.tryParse(j['stock_actual'].toString()) ?? 0,
-    stockMinimo: int.tryParse(j['stock_minimo'].toString()) ?? 0,
+  factory Producto.fromMap(String id, Map<String, dynamic> d, {int stockActual = 0, int stockMinimo = 0}) => Producto(
+    id:              id,
+    nombre:          d['nombre']           ?? '',
+    descripcion:     d['descripcion']      ?? '',
+    idCategoria:     d['id_categoria']     ?? '',
+    categoriaNombre: d['categoria_nombre'] ?? '',
+    precioCompra:    (d['precio_compra']   as num?)?.toDouble() ?? 0,
+    precioVenta:     (d['precio_venta']    as num?)?.toDouble() ?? 0,
+    stockActual:     stockActual,
+    stockMinimo:     stockMinimo,
   );
 
-  int get idProducto => _idProducto;
-  String get codigo => _codigo;
-  String get nombre => _nombre;
-  String get descripcion => _descripcion;
-  int get idCategoria => _idCategoria;
+  String get idProducto      => _id;
+  String get codigo          => _id.substring(0, _id.length.clamp(0, 6)).toUpperCase();
+  String get nombre          => _nombre;
+  String get descripcion     => _descripcion;
+  String get idCategoria     => _idCategoria;
   String get categoriaNombre => _categoriaNombre;
-  double get precioCompra => _precioCompra;
-  double get precioVenta => _precioVenta;
-  int get stockActual => _stockActual;
-  int get stockMinimo => _stockMinimo;
-  double get ganancia => _precioVenta - _precioCompra;
+  double get precioCompra    => _precioCompra;
+  double get precioVenta     => _precioVenta;
+  int    get stockActual     => _stockActual;
+  int    get stockMinimo     => _stockMinimo;
+  double get ganancia        => _precioVenta - _precioCompra;
 
-  set nombre(String v) => _nombre = v;
-  set descripcion(String v) => _descripcion = v;
+  set nombre(String v)       => _nombre = v;
+  set descripcion(String v)  => _descripcion = v;
   set precioCompra(double v) => _precioCompra = v;
-  set precioVenta(double v) => _precioVenta = v;
-  set idCategoria(int v) => _idCategoria = v;
-  set stockMinimo(int v) => _stockMinimo = v;
+  set precioVenta(double v)  => _precioVenta = v;
+  set idCategoria(String v)  => _idCategoria = v;
+  set stockMinimo(int v)     => _stockMinimo = v;
 
-  void aumentarStock(int cantidad) => _stockActual += cantidad;
-  void disminuirStock(int cantidad) => _stockActual -= cantidad;
-  bool estaEnStockMinimo() => _stockActual <= _stockMinimo;
-
-  Map<String, dynamic> toJson() => {
-    'id_producto': _idProducto,
-    'codigo': _codigo,
-    'nombre': _nombre,
-    'descripcion': _descripcion,
-    'id_categoria': _idCategoria,
-    'precio_compra': _precioCompra,
-    'precio_venta': _precioVenta,
-    'stock_actual': _stockActual,
-    'stock_minimo': _stockMinimo,
-  };
+  void aumentarStock(int c)  => _stockActual += c;
+  void disminuirStock(int c) => _stockActual -= c;
+  bool estaEnStockMinimo()   => _stockActual <= _stockMinimo;
 }
 
-// Clase para los datos de los clientes y sus deudas
+// ── Cliente ───────────────────────────────────────────
 class Cliente {
-  int _idCliente;
+  final String _id;
   String _nombre;
   String _telefono;
   String _direccion;
   double _saldoPendiente;
 
-  Cliente({
-    required int idCliente,
-    required String nombre,
-    required String telefono,
-    required String direccion,
-    required double saldoPendiente,
-  })  : _idCliente = idCliente,
-        _nombre = nombre,
-        _telefono = telefono,
-        _direccion = direccion,
-        _saldoPendiente = saldoPendiente;
+  Cliente({required String id, required String nombre, String telefono = '', String direccion = '', double saldoPendiente = 0})
+      : _id = id, _nombre = nombre, _telefono = telefono, _direccion = direccion, _saldoPendiente = saldoPendiente;
 
-  factory Cliente.fromJson(Map<String, dynamic> j) => Cliente(
-    idCliente: int.tryParse(j['id_cliente'].toString()) ?? 0,
-    nombre: j['nombre'] ?? '',
-    telefono: j['telefono'] ?? '',
-    direccion: j['direccion'] ?? '',
-    saldoPendiente: double.tryParse(j['saldo_pendiente'].toString()) ?? 0,
+  factory Cliente.fromMap(String id, Map<String, dynamic> d) => Cliente(
+    id:             id,
+    nombre:         d['nombre']          ?? '',
+    telefono:       d['telefono']        ?? '',
+    direccion:      d['direccion']       ?? '',
+    saldoPendiente: (d['saldo_pendiente'] as num?)?.toDouble() ?? 0,
   );
 
-  int get idCliente => _idCliente;
-  String get nombre => _nombre;
-  String get telefono => _telefono;
-  String get direccion => _direccion;
+  // Compatibilidad
+  factory Cliente.fromJson(Map<String, dynamic> j) => Cliente(
+    id:             j['id_cliente']?.toString() ?? '',
+    nombre:         j['nombre']          ?? '',
+    telefono:       j['telefono']        ?? '',
+    direccion:      j['direccion']       ?? '',
+    saldoPendiente: (j['saldo_pendiente'] as num?)?.toDouble() ?? 0,
+  );
+
+  String get idCliente      => _id;
+  String get nombre         => _nombre;
+  String get telefono       => _telefono;
+  String get direccion      => _direccion;
   double get saldoPendiente => _saldoPendiente;
 
-  set nombre(String v) => _nombre = v;
-  set telefono(String v) => _telefono = v;
+  set nombre(String v)    => _nombre = v;
+  set telefono(String v)  => _telefono = v;
   set direccion(String v) => _direccion = v;
 
-  void aumentarSaldo(double monto) => _saldoPendiente += monto;
-  void disminuirSaldo(double monto) => _saldoPendiente -= monto;
-
-  Map<String, dynamic> toJson() => {
-    'id_cliente': _idCliente,
-    'nombre': _nombre,
-    'telefono': _telefono,
-    'direccion': _direccion,
-    'saldo_pendiente': _saldoPendiente,
-  };
+  void aumentarSaldo(double m)  => _saldoPendiente += m;
+  void disminuirSaldo(double m) => _saldoPendiente -= m;
 }
 
-// Clase para los usuarios que entran al sistema
+// ── Usuario ───────────────────────────────────────────
 class Usuario {
-  int _idUsuario;
+  final String _id;
   String _nombre;
   String _email;
   String _rol;
   bool _activo;
+  String? _idSucursal;
+  String _sucursalNombre;
 
-  Usuario({
-    required int idUsuario,
-    required String nombre,
-    required String email,
-    required String rol,
-    required bool activo,
-  })  : _idUsuario = idUsuario,
-        _nombre = nombre,
-        _email = email,
-        _rol = rol,
-        _activo = activo;
+  Usuario({required String id, required String nombre, required String email, required String rol, required bool activo, String? idSucursal, String sucursalNombre = ''})
+      : _id = id, _nombre = nombre, _email = email, _rol = rol, _activo = activo, _idSucursal = idSucursal, _sucursalNombre = sucursalNombre;
 
-  factory Usuario.fromJson(Map<String, dynamic> j) => Usuario(
-    idUsuario: int.tryParse(j['id_usuario'].toString()) ?? 0,
-    nombre: j['nombre'] ?? '',
-    email: j['email'] ?? '',
-    rol: j['rol'] ?? '',
-    activo: (int.tryParse(j['activo'].toString()) ?? 1) == 1,
+  factory Usuario.fromMap(String id, Map<String, dynamic> d, {String sucursalNombre = ''}) => Usuario(
+    id:             id,
+    nombre:         d['nombre']      ?? '',
+    email:          d['email']       ?? '',
+    rol:            d['rol']         ?? 'Empleado',
+    activo:         d['activo']      ?? true,
+    idSucursal:     d['id_sucursal'] as String?,
+    sucursalNombre: sucursalNombre,
   );
 
-  int get idUsuario => _idUsuario;
-  String get nombre => _nombre;
-  String get email => _email;
-  String get rol => _rol;
-  bool get activo => _activo;
+  String  get idUsuario      => _id;
+  String  get nombre         => _nombre;
+  String  get email          => _email;
+  String  get rol            => _rol;
+  bool    get activo         => _activo;
+  String? get idSucursal     => _idSucursal;
+  String  get sucursalNombre => _sucursalNombre;
+  bool    get esAdminGlobal  => _idSucursal == null;
 
-  set nombre(String v) => _nombre = v;
-  set email(String v) => _email = v;
+  set nombre(String v)      => _nombre = v;
+  set email(String v)       => _email = v;
+  set idSucursal(String? v) => _idSucursal = v;
 
-  void activar() => _activo = true;
-  void desactivar() => _activo = false;
-  void cambiarRol(String nuevoRol) => _rol = nuevoRol;
-
-  Map<String, dynamic> toJson() => {
-    'id_usuario': _idUsuario,
-    'nombre': _nombre,
-    'email': _email,
-    'rol': _rol,
-    'activo': _activo ? 1 : 0,
-  };
+  void activar()                   => _activo = true;
+  void desactivar()                => _activo = false;
+  void cambiarRol(String r)        => _rol = r;
 }
 
-// Clase para saber que productos se llevan en una venta
+// ── DetalleVenta ──────────────────────────────────────
 class DetalleVenta {
   final Producto _producto;
   int _cantidad;
 
   DetalleVenta({required Producto producto, required int cantidad})
-      : _producto = producto,
-        _cantidad = cantidad;
+      : _producto = producto, _cantidad = cantidad;
 
-  Producto get producto => _producto;
-  int get cantidad => _cantidad;
-  double get precioUnitario => _producto.precioVenta;
-  double get subtotal => calcularSubtotal();
+  Producto get producto       => _producto;
+  int      get cantidad       => _cantidad;
+  double   get precioUnitario => _producto.precioVenta;
+  double   get subtotal       => _producto.precioVenta * _cantidad;
+  set cantidad(int v)         => _cantidad = v;
 
-  set cantidad(int v) => _cantidad = v;
-
-  double calcularSubtotal() => _producto.precioVenta * _cantidad;
-
-  Map<String, dynamic> toJson() => {
-    'id_producto': _producto.idProducto,
-    'cantidad': _cantidad,
+  Map<String, dynamic> toMap() => {
+    'id_producto':     _producto.idProducto,
+    'nombre_producto': _producto.nombre,
+    'cantidad':        _cantidad,
     'precio_unitario': precioUnitario,
-    'subtotal': subtotal,
+    'subtotal':        subtotal,
   };
 }
 
-// Clase para guardar toda la informacion de una venta
+// ── Venta ─────────────────────────────────────────────
 class Venta {
-  int _idVenta;
-  DateTime _fecha;
-  int _idMetodoPago;
-  String _metodoPagoNombre;
-  int _idUsuario;
-  int? _idCliente;
-  String _clienteNombre;
-  double _total;
-  TipoVenta _tipoVenta;
-  List<DetalleVenta> _detalles;
+  final String _id;
+  final String _fecha;
+  final String _idMetodoPago;
+  final String _metodoPagoNombre;
+  final String _idUsuario;
+  final String? _idCliente;
+  final String _clienteNombre;
+  final double _total;
+  final TipoVenta _tipoVenta;
+  final String _idSucursal;
+  final bool _anulada;
+  final int _timestamp;
 
   Venta({
-    required int idVenta,
-    required DateTime fecha,
-    required int idMetodoPago,
+    required String id,
+    required String fecha,
+    required String idMetodoPago,
     required String metodoPagoNombre,
-    required int idUsuario,
-    int? idCliente,
-    required String clienteNombre,
+    required String idUsuario,
+    String? idCliente,
+    String clienteNombre = '',
     required double total,
     required TipoVenta tipoVenta,
-    List<DetalleVenta>? detalles,
-  })  : _idVenta = idVenta,
-        _fecha = fecha,
-        _idMetodoPago = idMetodoPago,
+    required String idSucursal,
+    bool anulada = false,
+    int timestamp = 0,
+  })  : _id              = id,
+        _fecha           = fecha,
+        _idMetodoPago    = idMetodoPago,
         _metodoPagoNombre = metodoPagoNombre,
-        _idUsuario = idUsuario,
-        _idCliente = idCliente,
-        _clienteNombre = clienteNombre,
-        _total = total,
-        _tipoVenta = tipoVenta,
-        _detalles = detalles ?? [];
+        _idUsuario       = idUsuario,
+        _idCliente       = idCliente,
+        _clienteNombre   = clienteNombre,
+        _total           = total,
+        _tipoVenta       = tipoVenta,
+        _idSucursal      = idSucursal,
+        _anulada         = anulada,
+        _timestamp       = timestamp;
 
-  factory Venta.fromJson(Map<String, dynamic> j) => Venta(
-    idVenta: int.tryParse(j['id_venta'].toString()) ?? 0,
-    fecha: DateTime.tryParse(j['fecha'].toString()) ?? DateTime.now(),
-    idMetodoPago: int.tryParse(j['id_metodo_pago'].toString()) ?? 0,
-    metodoPagoNombre: j['metodo_pago'] ?? '',
-    idUsuario: int.tryParse(j['id_usuario'].toString()) ?? 0,
-    idCliente: j['id_cliente'] != null ? int.tryParse(j['id_cliente'].toString()) : null,
-    clienteNombre: j['cliente'] ?? '',
-    total: double.tryParse(j['total'].toString()) ?? 0,
-    tipoVenta: TipoVentaExt.fromString(j['tipo_venta'] ?? 'Contado'),
+  factory Venta.fromMap(String id, Map<String, dynamic> d) => Venta(
+    id:               id,
+    fecha:            d['fecha']             ?? '',
+    idMetodoPago:     d['id_metodo_pago']    ?? '',
+    metodoPagoNombre: d['metodo_pago_nombre'] ?? '',
+    idUsuario:        d['id_usuario']        ?? '',
+    idCliente:        d['id_cliente']        as String?,
+    clienteNombre:    d['cliente_nombre']    ?? '',
+    total:            (d['total']            as num?)?.toDouble() ?? 0,
+    tipoVenta:        TipoVentaExt.fromString(d['tipo_venta'] ?? 'Contado'),
+    idSucursal:       d['id_sucursal']       ?? '',
+    anulada:          d['anulada']           ?? false,
+    timestamp:        (d['timestamp']        as num?)?.toInt() ?? 0,
   );
 
-  int get idVenta => _idVenta;
-  DateTime get fecha => _fecha;
-  int get idMetodoPago => _idMetodoPago;
-  String get metodoPagoNombre => _metodoPagoNombre;
-  int get idUsuario => _idUsuario;
-  int? get idCliente => _idCliente;
-  String get clienteNombre => _clienteNombre;
-  double get total => _total;
-  TipoVenta get tipoVenta => _tipoVenta;
-  List<DetalleVenta> get detalles => _detalles;
-  bool get esFiado => _tipoVenta == TipoVenta.fiado;
-  bool get anulada => _metodoPagoNombre.toLowerCase() == 'anulada';
-
-  double calcularTotal() {
-    _total = _detalles.fold(0, (sum, d) => sum + d.calcularSubtotal());
-    return _total;
-  }
+  String   get idVenta          => _id;
+  String   get fecha            => _fecha;
+  String   get idMetodoPago     => _idMetodoPago;
+  String   get metodoPagoNombre => _metodoPagoNombre;
+  String   get idUsuario        => _idUsuario;
+  String?  get idCliente        => _idCliente;
+  String   get clienteNombre    => _clienteNombre;
+  double   get total            => _total;
+  TipoVenta get tipoVenta       => _tipoVenta;
+  String   get idSucursal       => _idSucursal;
+  bool     get esFiado          => _tipoVenta == TipoVenta.fiado;
+  bool     get anulada          => _anulada;
+  int      get timestamp        => _timestamp;
 }

@@ -1,33 +1,25 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
-import 'example.dart' show kBaseUrl;
+import 'database_service.dart';
 import 'models.dart';
 
-const kPrimary = Color(0xFF1A5276);
-const kAccent  = Color(0xFF2E86C1);
-const kSuccess = Color(0xFF1ABC9C);
-const kDanger  = Color(0xFFE74C3C);
-const kWarning = Color(0xFFE67E22);
-const kBg      = Color(0xFFF0F4F8);
+const _kPrimary = Color(0xFF1A5276);
+const _kAccent  = Color(0xFF2E86C1);
+const _kSuccess = Color(0xFF1ABC9C);
+const _kDanger  = Color(0xFFE74C3C);
+const _kWarning = Color(0xFFE67E22);
+const _kBg      = Color(0xFFF0F4F8);
 
 class ProductoVenta {
-  final int id;
+  final String id;
   final String nombre;
   final double precio;
   int stock;
   final String categoriaNombre;
-  final int idCategoria;
 
-  ProductoVenta({required this.id, required this.nombre, required this.precio, required this.stock, required this.categoriaNombre, required this.idCategoria});
+  ProductoVenta({required this.id, required this.nombre, required this.precio, required this.stock, required this.categoriaNombre});
 
-  factory ProductoVenta.fromJson(Map<String, dynamic> j) => ProductoVenta(
-    id: int.tryParse(j["id_producto"].toString()) ?? 0,
-    nombre: j["nombre"] ?? "",
-    precio: double.tryParse(j["precio_venta"].toString()) ?? 0,
-    stock: int.tryParse(j["stock_actual"].toString()) ?? 0,
-    categoriaNombre: j["categoria_nombre"] ?? "",
-    idCategoria: int.tryParse(j["id_categoria"].toString()) ?? 0,
+  factory ProductoVenta.fromProducto(Producto p) => ProductoVenta(
+    id: p.idProducto, nombre: p.nombre, precio: p.precioVenta, stock: p.stockActual, categoriaNombre: p.categoriaNombre,
   );
 }
 
@@ -36,29 +28,38 @@ class ItemCarrito {
   int cantidad;
   ItemCarrito({required this.producto, required this.cantidad});
   double get subtotal => producto.precio * cantidad;
-  Map<String, dynamic> toJson() => {"id_producto": producto.id, "cantidad": cantidad, "precio_unitario": producto.precio, "subtotal": subtotal};
+  Map<String, dynamic> toMap() => {
+    'id_producto': producto.id, 'nombre_producto': producto.nombre,
+    'cantidad': cantidad, 'precio_unitario': producto.precio, 'subtotal': subtotal,
+  };
 }
 
 class ModuloVentas extends StatefulWidget {
-  final int idUsuario;
-  const ModuloVentas({super.key, required this.idUsuario});
+  final String idUsuario;
+  final String idSucursal;
+  const ModuloVentas({super.key, required this.idUsuario, required this.idSucursal});
   @override
   State<ModuloVentas> createState() => _ModuloVentasState();
 }
 
 class _ModuloVentasState extends State<ModuloVentas> with SingleTickerProviderStateMixin {
+  final _svc = DatabaseService();
   late TabController _tabCtrl;
-  List<ProductoVenta> _productos   = [];
-  List<Cliente>       _clientes    = [];
-  List<MetodoPago>    _metodos     = [];
-  List<Venta>         _historial   = [];
-  List<ItemCarrito>   _carrito     = [];
+  List<ProductoVenta> _productos  = [];
+  List<Cliente>       _clientes   = [];
+  List<MetodoPago>    _metodos    = [];
+  List<Venta>         _historial  = [];
+  List<ItemCarrito>   _carrito    = [];
   bool _cargando = true;
   String _busqueda = "";
   MetodoPago? _metodoSelec;
   TipoVenta _tipoVenta = TipoVenta.contado;
   Cliente? _clienteSelec;
   Map<String, dynamic> _resumen = {};
+
+  // Datos del usuario y sucursal para registrar en la venta
+  String _usuarioNombre  = '';
+  String _sucursalNombre = '';
 
   @override
   void initState() {
@@ -72,95 +73,105 @@ class _ModuloVentasState extends State<ModuloVentas> with SingleTickerProviderSt
   }
 
   @override
+  void didUpdateWidget(ModuloVentas old) {
+    super.didUpdateWidget(old);
+    if (old.idSucursal != widget.idSucursal) _cargarDatos();
+  }
+
+  @override
   void dispose() { _tabCtrl.dispose(); super.dispose(); }
 
-  // Traemos productos, clientes y metodos de pago para vender
   Future<void> _cargarDatos() async {
     setState(() => _cargando = true);
     try {
-      final rP = await http.post(Uri.parse("$kBaseUrl/ventas.php"), headers: {"Content-Type": "application/json"}, body: jsonEncode({"accion": "productos"})).timeout(const Duration(seconds: 10));
-      final rC = await http.post(Uri.parse("$kBaseUrl/ventas.php"), headers: {"Content-Type": "application/json"}, body: jsonEncode({"accion": "clientes"})).timeout(const Duration(seconds: 10));
-      final rM = await http.post(Uri.parse("$kBaseUrl/ventas.php"), headers: {"Content-Type": "application/json"}, body: jsonEncode({"accion": "metodos_pago"})).timeout(const Duration(seconds: 10));
-      final dp = jsonDecode(rP.body); final dc = jsonDecode(rC.body); final dm = jsonDecode(rM.body);
+      final results = await Future.wait([
+        _svc.getProductosConStock(idSucursal: widget.idSucursal),
+        _svc.getClientes(),
+        _svc.getMetodosPago(),
+        _svc.getSucursales(),
+      ]);
+      // Obtener nombre del usuario actual
+      final usuarios = await _svc.getUsuarios();
+      final usuarioActual = usuarios.where((u) => u.idUsuario == widget.idUsuario).firstOrNull;
+      _usuarioNombre = usuarioActual?.nombre ?? '';
+
+      // Obtener nombre de la sucursal
+      final sucursales = results[3] as List<Sucursal>;
+      final suc = sucursales.where((s) => s.idSucursal == widget.idSucursal).firstOrNull;
+      _sucursalNombre = suc?.nombre ?? '';
+
       setState(() {
-        if (dp["success"] == true) _productos = (dp["productos"] as List).map((e) => ProductoVenta.fromJson(e)).toList();
-        if (dc["success"] == true) _clientes  = (dc["clientes"]  as List).map((e) => Cliente.fromJson(e)).toList();
-        if (dm["success"] == true) {
-          _metodos = (dm["metodos"] as List).map((e) => MetodoPago.fromJson(e)).toList();
-          if (_metodos.isNotEmpty) _metodoSelec = _metodos.first;
-        }
+        _productos = (results[0] as List<Producto>).map((p) => ProductoVenta.fromProducto(p)).toList();
+        _clientes  = results[1] as List<Cliente>;
+        _metodos   = results[2] as List<MetodoPago>;
+        if (_metodos.isNotEmpty) _metodoSelec = _metodos.first;
       });
-    } catch (e) { _snack("Error al cargar: $e", kDanger); }
+    } catch (e) { _snack("Error al cargar: $e", _kDanger); }
     finally { setState(() => _cargando = false); }
   }
 
-  // Obtenemos las ultimas ventas realizadas
   Future<void> _cargarHistorial() async {
     try {
-      final res = await http.post(Uri.parse("$kBaseUrl/ventas.php"), headers: {"Content-Type": "application/json"}, body: jsonEncode({"accion": "historial"})).timeout(const Duration(seconds: 10));
-      final data = jsonDecode(res.body);
-      if (data["success"] == true) setState(() => _historial = (data["ventas"] as List).map((e) => Venta.fromJson(e)).toList());
-    } catch (e) { _snack("Error: $e", kDanger); }
+      final ventas = await _svc.getHistorialVentas(idSucursal: widget.idSucursal);
+      setState(() => _historial = ventas);
+    } catch (e) { _snack("Error: $e", _kDanger); }
   }
 
-  // Ver los totales vendidos por metodo de pago
   Future<void> _cargarResumen() async {
     try {
-      final res = await http.post(Uri.parse("$kBaseUrl/ventas.php"), headers: {"Content-Type": "application/json"}, body: jsonEncode({"accion": "resumen"})).timeout(const Duration(seconds: 10));
-      final data = jsonDecode(res.body);
-      if (data["success"] == true) setState(() => _resumen = data);
-    } catch (e) { _snack("Error: $e", kDanger); }
+      final data = await _svc.getResumenDia(idSucursal: widget.idSucursal);
+      setState(() => _resumen = data);
+    } catch (e) { _snack("Error: $e", _kDanger); }
   }
 
-  // Mandamos la venta final al servidor para descontar stock
   Future<void> _registrarVenta() async {
-    if (_carrito.isEmpty) { _snack("Agrega productos al carrito", kWarning); return; }
-    if (_metodoSelec == null) { _snack("Selecciona un método de pago", kWarning); return; }
-    if (_tipoVenta == TipoVenta.fiado && _clienteSelec == null) { _snack("Selecciona un cliente para venta fiada", kWarning); return; }
+    if (_carrito.isEmpty) { _snack("Agrega productos al carrito", _kWarning); return; }
+    if (_metodoSelec == null) { _snack("Selecciona un método de pago", _kWarning); return; }
+    if (_tipoVenta == TipoVenta.fiado && _clienteSelec == null) { _snack("Selecciona un cliente para venta fiada", _kWarning); return; }
 
+    final esFiado = _tipoVenta == TipoVenta.fiado;
     final total = _carrito.fold<double>(0, (s, i) => s + i.subtotal);
     try {
-      final res = await http.post(Uri.parse("$kBaseUrl/ventas.php"),
-          headers: {"Content-Type": "application/json"},
-          body: jsonEncode({
-            "accion": "registrar",
-            "id_usuario": widget.idUsuario,
-            "id_metodo_pago": _metodoSelec!.idMetodoPago,
-            "tipo_venta": _tipoVenta.valor,
-            "id_cliente": _clienteSelec?.idCliente,
-            "items": _carrito.map((i) => i.toJson()).toList(),
-            "total": total,
-          })).timeout(const Duration(seconds: 10));
-      final data = jsonDecode(res.body);
-      if (data["success"] == true) {
-        setState(() { _carrito.clear(); _clienteSelec = null; _tipoVenta = TipoVenta.contado; if (_metodos.isNotEmpty) _metodoSelec = _metodos.first; });
-        if (mounted) Navigator.pop(context);
-        _snack("Venta registrada correctamente", kSuccess);
-        _cargarDatos();
-      } else { _snack(data["message"], kDanger); }
-    } catch (e) { _snack("Error: $e", kDanger); }
+      await _svc.registrarVenta(
+        idUsuario:        widget.idUsuario,
+        usuarioNombre:    _usuarioNombre,
+        idSucursal:       widget.idSucursal,
+        sucursalNombre:   _sucursalNombre,
+        // Fiado siempre guarda método 'Fiado', independiente del selector
+        idMetodoPago:     esFiado ? 'fiado' : _metodoSelec!.idMetodoPago,
+        metodoPagoNombre: esFiado ? 'Fiado' : _metodoSelec!.nombre,
+        tipoVenta:        _tipoVenta.valor,
+        idCliente:        _clienteSelec?.idCliente,
+        clienteNombre:    _clienteSelec?.nombre ?? '',
+        items:            _carrito.map((i) => i.toMap()).toList(),
+        total:            total,
+      );
+      setState(() {
+        _carrito.clear(); _clienteSelec = null; _tipoVenta = TipoVenta.contado;
+        if (_metodos.isNotEmpty) _metodoSelec = _metodos.first;
+      });
+      if (mounted) Navigator.pop(context);
+      _snack("Venta registrada correctamente", _kSuccess);
+      _cargarDatos();
+    } catch (e) { _snack("Error: $e", _kDanger); }
   }
 
-  // Cancela una venta y devuelve los productos al stock
-  Future<void> _anularVenta(int idVenta) async {
+  Future<void> _anularVenta(String idVenta) async {
     try {
-      final res = await http.post(Uri.parse("$kBaseUrl/ventas.php"), headers: {"Content-Type": "application/json"}, body: jsonEncode({"accion": "anular", "id_venta": idVenta})).timeout(const Duration(seconds: 10));
-      final data = jsonDecode(res.body);
-      _snack(data["message"], data["success"] == true ? kSuccess : kDanger);
-      if (data["success"] == true) { _cargarHistorial(); _cargarDatos(); }
-    } catch (e) { _snack("Error: $e", kDanger); }
+      await _svc.anularVenta(idVenta);
+      _snack("Venta anulada correctamente", _kSuccess);
+      _cargarHistorial(); _cargarDatos();
+    } catch (e) { _snack("Error: $e", _kDanger); }
   }
 
-  // Agregamos una unidad del producto al carrito
   void _agregar(ProductoVenta p) {
     setState(() {
       final idx = _carrito.indexWhere((i) => i.producto.id == p.id);
-      if (idx >= 0) { if (_carrito[idx].cantidad < p.stock) _carrito[idx].cantidad++; else _snack("Sin más stock", kWarning); }
+      if (idx >= 0) { if (_carrito[idx].cantidad < p.stock) _carrito[idx].cantidad++; else _snack("Sin más stock", _kWarning); }
       else _carrito.add(ItemCarrito(producto: p, cantidad: 1));
     });
   }
 
-  // Quitamos una unidad o el producto completo del carrito
   void _quitar(ProductoVenta p) {
     setState(() {
       final idx = _carrito.indexWhere((i) => i.producto.id == p.id);
@@ -168,7 +179,7 @@ class _ModuloVentasState extends State<ModuloVentas> with SingleTickerProviderSt
     });
   }
 
-  int _enCarrito(int id) { final idx = _carrito.indexWhere((i) => i.producto.id == id); return idx >= 0 ? _carrito[idx].cantidad : 0; }
+  int _enCarrito(String id) { final idx = _carrito.indexWhere((i) => i.producto.id == id); return idx >= 0 ? _carrito[idx].cantidad : 0; }
   double get _totalCarrito => _carrito.fold(0, (s, i) => s + i.subtotal);
   int get _cantidadCarrito => _carrito.fold(0, (s, i) => s + i.cantidad);
 
@@ -178,7 +189,6 @@ class _ModuloVentasState extends State<ModuloVentas> with SingleTickerProviderSt
     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)), margin: const EdgeInsets.all(16),
   ));
 
-  // Ventana flotante para ver lo que vamos a vender
   void _abrirCarrito() {
     showModalBottomSheet(
       context: context, isScrollControlled: true, backgroundColor: Colors.transparent,
@@ -192,14 +202,14 @@ class _ModuloVentasState extends State<ModuloVentas> with SingleTickerProviderSt
               Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(2))),
               const SizedBox(height: 16),
               Padding(padding: const EdgeInsets.symmetric(horizontal: 20), child: Row(children: [
-                const Icon(Icons.shopping_cart_rounded, color: kPrimary, size: 22),
+                const Icon(Icons.shopping_cart_rounded, color: _kPrimary, size: 22),
                 const SizedBox(width: 10),
-                const Text("Carrito", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: kPrimary)),
+                const Text("Carrito", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: _kPrimary)),
                 const Spacer(),
                 if (_carrito.isNotEmpty) TextButton.icon(
                   onPressed: () { setState(() => _carrito.clear()); setSt(() {}); },
                   icon: const Icon(Icons.delete_sweep_rounded, size: 16), label: const Text("Limpiar"),
-                  style: TextButton.styleFrom(foregroundColor: kDanger),
+                  style: TextButton.styleFrom(foregroundColor: _kDanger),
                 ),
               ])),
               const Divider(height: 24),
@@ -213,7 +223,6 @@ class _ModuloVentasState extends State<ModuloVentas> with SingleTickerProviderSt
                     : ListView(controller: sc, padding: const EdgeInsets.symmetric(horizontal: 20), children: [
                   ..._carrito.map((item) => _itemCarrito(item, setSt)),
                   const SizedBox(height: 16),
-
                   const Text("Tipo de venta", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF2C3E50))),
                   const SizedBox(height: 10),
                   Row(children: TipoVenta.values.map((t) {
@@ -225,21 +234,20 @@ class _ModuloVentasState extends State<ModuloVentas> with SingleTickerProviderSt
                         margin: EdgeInsets.only(right: t == TipoVenta.contado ? 8 : 0),
                         padding: const EdgeInsets.symmetric(vertical: 12),
                         decoration: BoxDecoration(
-                          color: sel ? kPrimary : Colors.grey[50],
+                          color: sel ? _kPrimary : Colors.grey[50],
                           borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: sel ? kPrimary : Colors.grey[200]!),
+                          border: Border.all(color: sel ? _kPrimary : Colors.grey[200]!),
                         ),
                         child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                          Icon(t == TipoVenta.contado ? Icons.payments_rounded : Icons.handshake_rounded, color: sel ? Colors.white : Colors.grey[500], size: 18),
+                          Icon(t == TipoVenta.contado ? Icons.payments_rounded : Icons.handshake_rounded,
+                              color: sel ? Colors.white : Colors.grey[500], size: 18),
                           const SizedBox(width: 6),
                           Text(t.valor, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: sel ? Colors.white : Colors.grey[600])),
                         ]),
                       ),
                     ));
                   }).toList()),
-
                   const SizedBox(height: 16),
-
                   if (_tipoVenta == TipoVenta.contado) ...[
                     const Text("Método de pago", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF2C3E50))),
                     const SizedBox(height: 10),
@@ -251,53 +259,43 @@ class _ModuloVentasState extends State<ModuloVentas> with SingleTickerProviderSt
                           duration: const Duration(milliseconds: 200),
                           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                           decoration: BoxDecoration(
-                            color: sel ? kAccent : Colors.grey[50],
+                            color: sel ? _kAccent : Colors.grey[50],
                             borderRadius: BorderRadius.circular(10),
-                            border: Border.all(color: sel ? kAccent : Colors.grey[200]!),
+                            border: Border.all(color: sel ? _kAccent : Colors.grey[200]!),
                           ),
                           child: Text(m.nombre, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: sel ? Colors.white : Colors.grey[600])),
                         ),
                       );
                     }).toList()),
                   ],
-
                   if (_tipoVenta == TipoVenta.fiado) ...[
                     const Text("Cliente *", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF2C3E50))),
                     const SizedBox(height: 8),
                     Container(
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFF4F6F8),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Colors.grey[200]!),
-                      ),
+                      decoration: BoxDecoration(color: const Color(0xFFF4F6F8), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.grey[200]!)),
                       constraints: const BoxConstraints(maxHeight: 200),
                       child: _clientes.isEmpty
-                          ? const Padding(
-                        padding: EdgeInsets.all(16),
-                        child: Text("Sin clientes registrados", style: TextStyle(color: Colors.grey, fontSize: 13)),
-                      )
+                          ? const Padding(padding: EdgeInsets.all(16), child: Text("Sin clientes registrados", style: TextStyle(color: Colors.grey, fontSize: 13)))
                           : ListView.separated(
-                        shrinkWrap: true,
-                        padding: EdgeInsets.zero,
+                        shrinkWrap: true, padding: EdgeInsets.zero,
                         itemCount: _clientes.length,
                         separatorBuilder: (_, __) => const Divider(height: 1, color: Color(0xFFE0E0E0)),
                         itemBuilder: (_, i) {
                           final cl = _clientes[i];
-                          final seleccionado = _clienteSelec?.idCliente == cl.idCliente;
+                          final sel = _clienteSelec?.idCliente == cl.idCliente;
                           return GestureDetector(
                             onTap: () { setSt(() => _clienteSelec = cl); setState(() {}); },
                             child: Container(
-                              color: seleccionado ? kAccent.withOpacity(0.08) : Colors.transparent,
+                              color: sel ? _kAccent.withOpacity(0.08) : Colors.transparent,
                               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                               child: Row(children: [
-                                CircleAvatar(radius: 14, backgroundColor: kAccent.withOpacity(0.15),
-                                    child: Text(cl.nombre[0].toUpperCase(), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: kAccent))),
+                                CircleAvatar(radius: 14, backgroundColor: _kAccent.withOpacity(0.15),
+                                    child: Text(cl.nombre[0].toUpperCase(), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: _kAccent))),
                                 const SizedBox(width: 10),
-                                Expanded(child: Text(cl.nombre, style: TextStyle(fontSize: 14, fontWeight: seleccionado ? FontWeight.w600 : FontWeight.normal, color: const Color(0xFF2C3E50)))),
+                                Expanded(child: Text(cl.nombre, style: TextStyle(fontSize: 14, fontWeight: sel ? FontWeight.w600 : FontWeight.normal, color: const Color(0xFF2C3E50)))),
                                 if (cl.saldoPendiente > 0)
-                                  Text("\$${cl.saldoPendiente.toStringAsFixed(0)}", style: const TextStyle(fontSize: 12, color: kDanger, fontWeight: FontWeight.w600)),
-                                if (seleccionado)
-                                  const Padding(padding: EdgeInsets.only(left: 8), child: Icon(Icons.check_circle_rounded, color: kAccent, size: 18)),
+                                  Text("\$${cl.saldoPendiente.toStringAsFixed(0)}", style: const TextStyle(fontSize: 12, color: _kDanger, fontWeight: FontWeight.w600)),
+                                if (sel) const Padding(padding: EdgeInsets.only(left: 8), child: Icon(Icons.check_circle_rounded, color: _kAccent, size: 18)),
                               ]),
                             ),
                           );
@@ -317,14 +315,15 @@ class _ModuloVentasState extends State<ModuloVentas> with SingleTickerProviderSt
                     Text("$_cantidadCarrito productos", style: TextStyle(color: Colors.grey[500], fontSize: 13)),
                     const Spacer(),
                     Text("Total  ", style: TextStyle(color: Colors.grey[500], fontSize: 13)),
-                    Text("\$${_totalCarrito.toStringAsFixed(0)}", style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: kPrimary)),
+                    Text("\$${_totalCarrito.toStringAsFixed(0)}", style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: _kPrimary)),
                   ]),
                   const SizedBox(height: 14),
                   SizedBox(width: double.infinity, height: 52, child: ElevatedButton.icon(
                     onPressed: _registrarVenta,
                     icon: const Icon(Icons.check_circle_rounded, size: 20),
                     label: Text("Confirmar · \$${_totalCarrito.toStringAsFixed(0)}", style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
-                    style: ElevatedButton.styleFrom(backgroundColor: kSuccess, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)), elevation: 0),
+                    style: ElevatedButton.styleFrom(backgroundColor: _kSuccess, foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)), elevation: 0),
                   )),
                 ]),
               ),
@@ -345,12 +344,12 @@ class _ModuloVentasState extends State<ModuloVentas> with SingleTickerProviderSt
         Text("\$${item.producto.precio.toStringAsFixed(0)} c/u", style: TextStyle(fontSize: 12, color: Colors.grey[400])),
       ])),
       Row(children: [
-        _btnRedondo(Icons.remove_rounded, () { _quitar(item.producto); setSt(() {}); }, kDanger),
+        _btnRedondo(Icons.remove_rounded, () { _quitar(item.producto); setSt(() {}); }, _kDanger),
         Padding(padding: const EdgeInsets.symmetric(horizontal: 12), child: Text("${item.cantidad}", style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold))),
-        _btnRedondo(Icons.add_rounded, () { _agregar(item.producto); setSt(() {}); }, kSuccess),
+        _btnRedondo(Icons.add_rounded, () { _agregar(item.producto); setSt(() {}); }, _kSuccess),
       ]),
       const SizedBox(width: 12),
-      Text("\$${item.subtotal.toStringAsFixed(0)}", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: kAccent)),
+      Text("\$${item.subtotal.toStringAsFixed(0)}", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: _kAccent)),
     ]),
   );
 
@@ -361,15 +360,14 @@ class _ModuloVentasState extends State<ModuloVentas> with SingleTickerProviderSt
 
   @override
   Widget build(BuildContext context) => Container(
-    color: kBg,
+    color: _kBg,
     child: Column(children: [
       Container(
-        color: Colors.white,
-        padding: const EdgeInsets.fromLTRB(24, 20, 24, 0),
+        color: Colors.white, padding: const EdgeInsets.fromLTRB(24, 20, 24, 0),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Row(children: [
             const Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text("Ventas", style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: kPrimary)),
+              Text("Ventas", style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: _kPrimary)),
               Text("Registra y gestiona las ventas del día", style: TextStyle(fontSize: 13, color: Colors.grey)),
             ]),
             const Spacer(),
@@ -377,11 +375,13 @@ class _ModuloVentasState extends State<ModuloVentas> with SingleTickerProviderSt
               ElevatedButton.icon(
                 onPressed: _abrirCarrito,
                 icon: const Icon(Icons.shopping_cart_rounded, size: 20), label: const Text("Carrito"),
-                style: ElevatedButton.styleFrom(backgroundColor: kPrimary, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), elevation: 0),
+                style: ElevatedButton.styleFrom(backgroundColor: _kPrimary, foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), elevation: 0),
               ),
               if (_carrito.isNotEmpty) Positioned(right: 0, top: 0, child: Container(
                 padding: const EdgeInsets.all(4),
-                decoration: const BoxDecoration(color: kDanger, shape: BoxShape.circle),
+                decoration: const BoxDecoration(color: _kDanger, shape: BoxShape.circle),
                 constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
                 child: Text("${_carrito.length}", style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold), textAlign: TextAlign.center),
               )),
@@ -389,8 +389,8 @@ class _ModuloVentasState extends State<ModuloVentas> with SingleTickerProviderSt
           ]),
           const SizedBox(height: 16),
           TabBar(
-            controller: _tabCtrl, labelColor: kPrimary, unselectedLabelColor: Colors.grey,
-            indicatorColor: kPrimary, indicatorWeight: 3,
+            controller: _tabCtrl, labelColor: _kPrimary, unselectedLabelColor: Colors.grey,
+            indicatorColor: _kPrimary, indicatorWeight: 3,
             labelStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
             tabs: const [Tab(text: "Productos"), Tab(text: "Historial"), Tab(text: "Resumen")],
           ),
@@ -403,46 +403,35 @@ class _ModuloVentasState extends State<ModuloVentas> with SingleTickerProviderSt
   Widget _tabProductos() {
     final filtrados = _productos.where((p) => p.nombre.toLowerCase().contains(_busqueda.toLowerCase())).toList();
     final porCat = <String, List<ProductoVenta>>{};
-    for (final p in filtrados) { porCat.putIfAbsent(p.categoriaNombre, () => []).add(p); }
-
+    for (final p in filtrados) porCat.putIfAbsent(p.categoriaNombre, () => []).add(p);
     return Column(children: [
       Padding(padding: const EdgeInsets.fromLTRB(16, 16, 16, 8), child: TextField(
         onChanged: (v) => setState(() => _busqueda = v),
         decoration: InputDecoration(
           hintText: "Buscar producto...", hintStyle: TextStyle(color: Colors.grey[400], fontSize: 13),
-          prefixIcon: const Icon(Icons.search_rounded, color: kAccent, size: 20),
+          prefixIcon: const Icon(Icons.search_rounded, color: _kAccent, size: 20),
           filled: true, fillColor: Colors.white, contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
           enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.grey[200]!)),
         ),
       )),
-      if (filtrados.isNotEmpty) Padding(padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-          child: Align(alignment: Alignment.centerLeft, child: Text("${filtrados.length} productos", style: TextStyle(fontSize: 12, color: Colors.grey[400])))),
       Expanded(
-        child: _cargando
-            ? const Center(child: CircularProgressIndicator(color: kAccent))
-            : filtrados.isEmpty
-            ? Center(child: Column(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.inventory_2_outlined, size: 52, color: Colors.grey[300]), const SizedBox(height: 12), Text("Sin productos", style: TextStyle(color: Colors.grey[400]))]))
+        child: _cargando ? const Center(child: CircularProgressIndicator(color: _kAccent))
+            : filtrados.isEmpty ? Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Icon(Icons.inventory_2_outlined, size: 52, color: Colors.grey[300]),
+          const SizedBox(height: 12),
+          Text("Sin productos con stock", style: TextStyle(color: Colors.grey[400])),
+        ]))
             : ListView(padding: const EdgeInsets.fromLTRB(16, 0, 16, 16), children: [
           Container(
             decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.grey[200]!),
                 boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 8, offset: const Offset(0, 2))]),
             child: ClipRRect(borderRadius: BorderRadius.circular(16), child: Column(
               children: porCat.entries.expand((entry) => [
-                Container(width: double.infinity, padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8), color: kPrimary.withOpacity(0.04),
-                  child: Row(children: [
-                    Icon(_iconoCat(entry.key), color: kPrimary, size: 13),
-                    const SizedBox(width: 6),
-                    Text(entry.key.toUpperCase(), style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: kPrimary, letterSpacing: 0.8)),
-                    const SizedBox(width: 8),
-                    Text("${entry.value.length}", style: TextStyle(fontSize: 11, color: Colors.grey[400])),
-                  ]),
-                ),
+                Container(width: double.infinity, padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8), color: _kPrimary.withOpacity(0.04),
+                    child: Text(entry.key.toUpperCase(), style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: _kPrimary, letterSpacing: 0.8))),
                 const Divider(height: 1, color: Color(0xFFEEF0F2)),
-                ...entry.value.map((p) => Column(children: [
-                  _filaProducto(p),
-                  const Divider(height: 1, indent: 60, color: Color(0xFFEEF0F2)),
-                ])),
+                ...entry.value.map((p) => Column(children: [_filaProducto(p), const Divider(height: 1, indent: 60, color: Color(0xFFEEF0F2))])),
               ]).toList(),
             )),
           ),
@@ -455,32 +444,32 @@ class _ModuloVentasState extends State<ModuloVentas> with SingleTickerProviderSt
     final qty = _enCarrito(p.id);
     final sinStock = p.stock == 0;
     return Material(
-      color: qty > 0 ? kAccent.withOpacity(0.03) : Colors.white,
+      color: qty > 0 ? _kAccent.withOpacity(0.03) : Colors.white,
       child: InkWell(
         onTap: sinStock ? null : () { _agregar(p); setState(() {}); },
         child: Padding(padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11), child: Row(children: [
-          Container(width: 38, height: 38, decoration: BoxDecoration(color: sinStock ? Colors.grey[100] : kAccent.withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
-              child: Icon(_iconoCat(p.categoriaNombre), color: sinStock ? Colors.grey[400] : kAccent, size: 18)),
+          Container(width: 38, height: 38, decoration: BoxDecoration(color: sinStock ? Colors.grey[100] : _kAccent.withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
+              child: Icon(Icons.category_rounded, color: sinStock ? Colors.grey[400] : _kAccent, size: 18)),
           const SizedBox(width: 12),
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(p.nombre, style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14, color: sinStock ? Colors.grey[400] : const Color(0xFF2C3E50)), overflow: TextOverflow.ellipsis),
-            const SizedBox(height: 2),
             Container(padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-                decoration: BoxDecoration(color: sinStock ? Colors.grey[100] : kSuccess.withOpacity(0.1), borderRadius: BorderRadius.circular(4)),
-                child: Text(sinStock ? "Sin stock" : "${p.stock} uds.", style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: sinStock ? Colors.grey[400] : kSuccess))),
+                decoration: BoxDecoration(color: sinStock ? Colors.grey[100] : _kSuccess.withOpacity(0.1), borderRadius: BorderRadius.circular(4)),
+                child: Text(sinStock ? "Sin stock" : "${p.stock} uds.", style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: sinStock ? Colors.grey[400] : _kSuccess))),
           ])),
-          Text("\$${p.precio.toStringAsFixed(0)}", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: sinStock ? Colors.grey[400] : kPrimary)),
+          Text("\$${p.precio.toStringAsFixed(0)}", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: sinStock ? Colors.grey[400] : _kPrimary)),
           const SizedBox(width: 12),
           if (sinStock) const SizedBox(width: 80)
           else if (qty == 0) SizedBox(width: 80, child: ElevatedButton(
             onPressed: () { _agregar(p); setState(() {}); },
-            style: ElevatedButton.styleFrom(backgroundColor: kPrimary, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical: 8), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)), elevation: 0, textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-            child: const Text("Agregar"),
+            style: ElevatedButton.styleFrom(backgroundColor: _kPrimary, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical: 8),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)), elevation: 0),
+            child: const Text("Agregar", style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
           ))
           else SizedBox(width: 80, child: Row(mainAxisAlignment: MainAxisAlignment.end, children: [
-              _btnRedondo(Icons.remove_rounded, () { _quitar(p); setState(() {}); }, kDanger),
-              Padding(padding: const EdgeInsets.symmetric(horizontal: 6), child: Text("$qty", style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: kPrimary))),
-              _btnRedondo(Icons.add_rounded, () { _agregar(p); setState(() {}); }, kSuccess),
+              _btnRedondo(Icons.remove_rounded, () { _quitar(p); setState(() {}); }, _kDanger),
+              Padding(padding: const EdgeInsets.symmetric(horizontal: 6), child: Text("$qty", style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: _kPrimary))),
+              _btnRedondo(Icons.add_rounded, () { _agregar(p); setState(() {}); }, _kSuccess),
             ])),
         ])),
       ),
@@ -491,7 +480,7 @@ class _ModuloVentasState extends State<ModuloVentas> with SingleTickerProviderSt
     Padding(padding: const EdgeInsets.fromLTRB(16, 16, 16, 0), child: Row(children: [
       const Text("Ventas de hoy", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Color(0xFF2C3E50))),
       const Spacer(),
-      TextButton.icon(onPressed: _cargarHistorial, icon: const Icon(Icons.refresh_rounded, size: 16), label: const Text("Actualizar"), style: TextButton.styleFrom(foregroundColor: kAccent)),
+      TextButton.icon(onPressed: _cargarHistorial, icon: const Icon(Icons.refresh_rounded, size: 16), label: const Text("Actualizar"), style: TextButton.styleFrom(foregroundColor: _kAccent)),
     ])),
     Expanded(
       child: _historial.isEmpty
@@ -512,21 +501,20 @@ class _ModuloVentasState extends State<ModuloVentas> with SingleTickerProviderSt
         leading: Container(width: 42, height: 42, decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
             child: Icon(_iconoMetodo(v.metodoPagoNombre), color: color, size: 20)),
         title: Row(children: [
-          Text("#${v.idVenta}", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF2C3E50))),
+          Text("#${v.idVenta.substring(0, v.idVenta.length.clamp(0, 6))}", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF2C3E50))),
           const SizedBox(width: 8),
           Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
               decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(6)),
               child: Text(v.metodoPagoNombre.toUpperCase(), style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: color))),
           const SizedBox(width: 6),
           Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-              decoration: BoxDecoration(color: v.esFiado ? kDanger.withOpacity(0.1) : kSuccess.withOpacity(0.1), borderRadius: BorderRadius.circular(6)),
-              child: Text(v.tipoVenta.valor.toUpperCase(), style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: v.esFiado ? kDanger : kSuccess))),
+              decoration: BoxDecoration(color: v.esFiado ? _kDanger.withOpacity(0.1) : _kSuccess.withOpacity(0.1), borderRadius: BorderRadius.circular(6)),
+              child: Text(v.tipoVenta.valor.toUpperCase(), style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: v.esFiado ? _kDanger : _kSuccess))),
         ]),
-        subtitle: Padding(padding: const EdgeInsets.only(top: 4),
-            child: Text(v.clienteNombre.isNotEmpty ? "Cliente: ${v.clienteNombre}" : "Usuario: ${v.metodoPagoNombre}", style: TextStyle(fontSize: 12, color: Colors.grey[500]))),
+        subtitle: v.clienteNombre.isNotEmpty ? Text("Cliente: ${v.clienteNombre}", style: TextStyle(fontSize: 12, color: Colors.grey[500])) : null,
         trailing: Row(mainAxisSize: MainAxisSize.min, children: [
-          Text("\$${v.total.toStringAsFixed(0)}", style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: kPrimary)),
-          IconButton(icon: const Icon(Icons.cancel_outlined, color: kDanger, size: 20), onPressed: () => _confirmarAnulacion(v)),
+          Text("\$${v.total.toStringAsFixed(0)}", style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: _kPrimary)),
+          if (!v.anulada) IconButton(icon: const Icon(Icons.cancel_outlined, color: _kDanger, size: 20), onPressed: () => _confirmarAnulacion(v)),
         ]),
       ),
     );
@@ -534,22 +522,22 @@ class _ModuloVentasState extends State<ModuloVentas> with SingleTickerProviderSt
 
   void _confirmarAnulacion(Venta v) => showDialog(context: context, builder: (_) => AlertDialog(
     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-    title: const Row(children: [Icon(Icons.warning_amber_rounded, color: kWarning), SizedBox(width: 8), Text("Anular venta")]),
-    content: Text("¿Anular venta #${v.idVenta} por \$${v.total.toStringAsFixed(0)}?\nSe devolverá el stock automáticamente."),
+    title: const Row(children: [Icon(Icons.warning_amber_rounded, color: _kWarning), SizedBox(width: 8), Text("Anular venta")]),
+    content: Text("¿Anular venta por \$${v.total.toStringAsFixed(0)}?\nSe devolverá el stock automáticamente."),
     actions: [
       TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancelar")),
-      ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: kDanger, foregroundColor: Colors.white, elevation: 0),
+      ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: _kDanger, foregroundColor: Colors.white, elevation: 0),
           onPressed: () { Navigator.pop(context); _anularVenta(v.idVenta); }, child: const Text("Anular")),
     ],
   ));
 
   Widget _tabResumen() {
-    final resumen = _resumen["resumen"] as List? ?? [];
-    final totalDia = double.tryParse(_resumen["total_dia"]?.toString() ?? "0") ?? 0;
+    final metodos  = (_resumen["ventas_por_metodo"] as List?) ?? [];
+    final totalDia = (_resumen["total_dia"] as num?)?.toDouble() ?? 0;
     final now = DateTime.now();
     return SingleChildScrollView(padding: const EdgeInsets.all(20), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Container(width: double.infinity, padding: const EdgeInsets.all(24),
-          decoration: BoxDecoration(gradient: const LinearGradient(colors: [kPrimary, kAccent], begin: Alignment.topLeft, end: Alignment.bottomRight), borderRadius: BorderRadius.circular(20)),
+          decoration: BoxDecoration(gradient: const LinearGradient(colors: [_kPrimary, _kAccent], begin: Alignment.topLeft, end: Alignment.bottomRight), borderRadius: BorderRadius.circular(20)),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Row(children: [const Icon(Icons.today_rounded, color: Colors.white70, size: 18), const SizedBox(width: 8), Text("${now.day}/${now.month}/${now.year}", style: const TextStyle(color: Colors.white70, fontSize: 13))]),
             const SizedBox(height: 12),
@@ -557,32 +545,32 @@ class _ModuloVentasState extends State<ModuloVentas> with SingleTickerProviderSt
             const Text("Total ventas del día", style: TextStyle(color: Colors.white60, fontSize: 13)),
           ])),
       const SizedBox(height: 20),
-      if (resumen.isEmpty)
+      if (metodos.isEmpty)
         Center(child: Padding(padding: const EdgeInsets.all(32), child: Column(children: [
           Icon(Icons.bar_chart_rounded, size: 52, color: Colors.grey[300]),
           const SizedBox(height: 12),
           Text("Sin ventas hoy", style: TextStyle(color: Colors.grey[400])),
           const SizedBox(height: 16),
           ElevatedButton.icon(onPressed: _cargarResumen, icon: const Icon(Icons.refresh_rounded, size: 16), label: const Text("Cargar"),
-              style: ElevatedButton.styleFrom(backgroundColor: kPrimary, foregroundColor: Colors.white, elevation: 0, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)))),
+              style: ElevatedButton.styleFrom(backgroundColor: _kPrimary, foregroundColor: Colors.white, elevation: 0, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)))),
         ])))
       else ...[
         const Text("Por método de pago", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Color(0xFF2C3E50))),
         const SizedBox(height: 12),
-        ...resumen.map((r) {
-          final sub = double.tryParse(r["subtotal"].toString()) ?? 0;
-          final pct = totalDia > 0 ? sub / totalDia : 0.0;
-          final color = _colorMetodo(r["metodo_pago"]);
+        ...metodos.map((r) {
+          final sub  = (r["subtotal"] as num?)?.toDouble() ?? 0;
+          final pct  = totalDia > 0 ? sub / totalDia : 0.0;
+          final color = _colorMetodo(r["metodo"]?.toString() ?? "");
           return Container(
             margin: const EdgeInsets.only(bottom: 10), padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14), border: Border.all(color: Colors.grey[100]!)),
             child: Column(children: [
               Row(children: [
                 Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
-                    child: Icon(_iconoMetodo(r["metodo_pago"]), color: color, size: 18)),
+                    child: Icon(_iconoMetodo(r["metodo"]?.toString() ?? ""), color: color, size: 18)),
                 const SizedBox(width: 12),
                 Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text(r["metodo_pago"].toString().toUpperCase(), style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: Color(0xFF2C3E50))),
+                  Text((r["metodo"] ?? "").toString().toUpperCase(), style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: Color(0xFF2C3E50))),
                   Text("${r["cantidad"]} ventas", style: TextStyle(fontSize: 12, color: Colors.grey[400])),
                 ])),
                 Text("\$${sub.toStringAsFixed(0)}", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: color)),
@@ -599,32 +587,21 @@ class _ModuloVentasState extends State<ModuloVentas> with SingleTickerProviderSt
     ]));
   }
 
-  Color _colorMetodo(String nombre) {
-    switch (nombre.toLowerCase()) {
-      case "efectivo":  return kSuccess;
-      case "nequi":     return const Color(0xFF8E44AD);
-      case "daviplata": return kWarning;
-      default:          return kAccent;
+  Color _colorMetodo(String n) {
+    switch (n.toLowerCase()) {
+      case 'efectivo':  return _kSuccess;
+      case 'nequi':     return const Color(0xFF8E44AD);
+      case 'daviplata': return _kWarning;
+      default:          return _kAccent;
     }
   }
 
-  IconData _iconoMetodo(String nombre) {
-    switch (nombre.toLowerCase()) {
-      case "efectivo":  return Icons.payments_rounded;
-      case "nequi":     return Icons.phone_android_rounded;
-      case "daviplata": return Icons.account_balance_wallet_rounded;
+  IconData _iconoMetodo(String n) {
+    switch (n.toLowerCase()) {
+      case 'efectivo':  return Icons.payments_rounded;
+      case 'nequi':     return Icons.phone_android_rounded;
+      case 'daviplata': return Icons.account_balance_wallet_rounded;
       default:          return Icons.receipt_rounded;
-    }
-  }
-
-  IconData _iconoCat(String cat) {
-    switch (cat.toLowerCase()) {
-      case "bebidas":   return Icons.local_drink_rounded;
-      case "alimentos": return Icons.fastfood_rounded;
-      case "aseo":      return Icons.cleaning_services_rounded;
-      case "licores":   return Icons.wine_bar_rounded;
-      case "snacks":    return Icons.cookie_rounded;
-      default:          return Icons.category_rounded;
     }
   }
 }

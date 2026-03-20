@@ -1,159 +1,143 @@
+// ══════════════════════════════════════════════════════
+//  main.dart — ReyesCompany SIV v3.0
+//  Auto-login: si hay sesión activa salta el login
+// ══════════════════════════════════════════════════════
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
-import 'example.dart';
+import 'firebase_options.dart';
+import 'login_screen.dart';
+import 'dashboard.dart';
+import 'database_service.dart';
+// import 'seed_screen.dart'; // Descomentar solo para inicializar
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  try {
+    await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  } catch (_) {
+    // Ya inicializado (hot restart en Android)
+  }
   runApp(const ReyesCompanyApp());
 }
 
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+class ReyesCompanyApp extends StatelessWidget {
+  const ReyesCompanyApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      title: 'ReyesCompany',
       debugShowCheckedModeBanner: false,
-      title: 'Material Login',
       theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
         useMaterial3: true,
+        colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF1A5276)),
+        fontFamily: 'Roboto',
       ),
-      home: const LoginPage(),
+      home: const SplashScreen(),
+      routes: {'/login': (_) => const LoginScreen()},
     );
   }
 }
 
-class LoginPage extends StatefulWidget {
-  const LoginPage({super.key});
-
+// ── SplashScreen ─────────────────────────────────────
+// Muestra el logo mientras verifica si hay sesión activa.
+// Si hay sesión → va directo al Dashboard.
+// Si no hay sesión → va al Login.
+class SplashScreen extends StatefulWidget {
+  const SplashScreen({super.key});
   @override
-  State<LoginPage> createState() => _LoginPageState();
+  State<SplashScreen> createState() => _SplashScreenState();
 }
 
-class _LoginPageState extends State<LoginPage> {
-
-  final TextEditingController emailController = TextEditingController();
-  final TextEditingController passwordController = TextEditingController();
-
-  bool obscurePassword = true;
+class _SplashScreenState extends State<SplashScreen>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _ctrl;
+  late Animation<double> _fade, _scale;
 
   @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      body: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(24),
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            colors: [Colors.deepPurple, Colors.indigo],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
+  void initState() {
+    super.initState();
+    _ctrl  = AnimationController(vsync: this, duration: const Duration(milliseconds: 1000));
+    _fade  = Tween<double>(begin: 0, end: 1).animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeIn));
+    _scale = Tween<double>(begin: 0.7, end: 1).animate(CurvedAnimation(parent: _ctrl, curve: Curves.elasticOut));
+    _ctrl.forward();
+    _verificarSesion();
+  }
+
+  Future<void> _verificarSesion() async {
+    await Future.delayed(const Duration(milliseconds: 1500));
+    if (!mounted) return;
+
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      debugPrint('=== SPLASH: currentUser = ${user?.uid ?? "null"}');
+
+      if (user == null) {
+        Navigator.pushReplacementNamed(context, '/login');
+        return;
+      }
+
+      final svc  = DatabaseService();
+      final snap = await svc.getUserProfile(user.uid);
+      debugPrint('=== SPLASH: perfil = $snap');
+
+      if (!mounted) return;
+      if (snap == null) {
+        await FirebaseAuth.instance.signOut();
+        Navigator.pushReplacementNamed(context, '/login');
+        return;
+      }
+
+      Navigator.pushReplacement(context, MaterialPageRoute(
+        builder: (_) => DashboardScreen(
+          usuario: UsuarioSesion(
+            idUsuario:      snap['id_usuario'],
+            nombre:         snap['nombre'],
+            rol:            snap['rol'],
+            idSucursal:     snap['id_sucursal'],
+            sucursalNombre: snap['sucursal_nombre'] ?? '',
           ),
         ),
-        child: Center(
-          child: Container(
-            padding: const EdgeInsets.all(24),
+      ));
+    } catch (e) {
+      debugPrint('=== SPLASH ERROR: $e');
+      if (mounted) Navigator.pushReplacementNamed(context, '/login');
+    }
+  }
+
+  @override
+  void dispose() { _ctrl.dispose(); super.dispose(); }
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    body: Container(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft, end: Alignment.bottomRight,
+          colors: [Color(0xFF1A5276), Color(0xFF2E86C1), Color(0xFF1ABC9C)],
+        ),
+      ),
+      child: Center(child: FadeTransition(opacity: _fade, child: ScaleTransition(scale: _scale,
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Container(width: 110, height: 110,
             decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(20),
-              boxShadow: [
-                BoxShadow(
-                  blurRadius: 20,
-                  color: Colors.black.withOpacity(0.2),
-                  offset: const Offset(0, 10),
-                )
-              ],
+              color: Colors.white.withOpacity(0.15), borderRadius: BorderRadius.circular(28),
+              border: Border.all(color: Colors.white.withOpacity(0.4), width: 2),
             ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-
-                const Text(
-                  "Bienvenido",
-                  style: TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-
-                const SizedBox(height: 8),
-
-                const Text(
-                  "Digita tus credenciales para continuar",
-                  style: TextStyle(color: Colors.grey),
-                ),
-
-                const SizedBox(height: 24),
-
-                TextField(
-                  controller: emailController,
-                  decoration: const InputDecoration(
-                    labelText: "Correo electrónico",
-                    prefixIcon: Icon(Icons.email),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.all(Radius.circular(12)),
-                    ),
-                  ),
-                ),
-
-                const SizedBox(height: 16),
-
-                TextField(
-                  controller: passwordController,
-                  obscureText: obscurePassword,
-                  decoration: InputDecoration(
-                    labelText: "Contraseña",
-                    prefixIcon: const Icon(Icons.lock),
-                    suffixIcon: IconButton(
-                      icon: Icon(
-                        obscurePassword
-                            ? Icons.visibility
-                            : Icons.visibility_off,
-                      ),
-                      onPressed: () {
-                        setState(() {
-                          obscurePassword = !obscurePassword;
-                        });
-                      },
-                    ),
-                    border: const OutlineInputBorder(
-                      borderRadius: BorderRadius.all(Radius.circular(12)),
-                    ),
-                  ),
-                ),
-
-                const SizedBox(height: 24),
-
-                SizedBox(
-                  width: double.infinity,
-                  height: 50,
-                  child: ElevatedButton(
-                    onPressed: () {
-                      print("Email: ${emailController.text}");
-                      print("Password: ${passwordController.text}");
-                    },
-                    style: ElevatedButton.styleFrom(
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                    child: const Text(
-                      "Iniciar Sesión",
-                      style: TextStyle(fontSize: 16),
-                    ),
-                  ),
-                ),
-
-                const SizedBox(height: 16),
-
-                TextButton(
-                  onPressed: () {},
-                  child: const Text("¿Olvidaste tu contraseña?"),
-                ),
-              ],
-            ),
+            child: const Icon(Icons.storefront_rounded, size: 64, color: Colors.white),
           ),
-        ),
-      ),
-    );
-  }
+          const SizedBox(height: 24),
+          const Text('ReyesCompany', style: TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.bold, letterSpacing: 1.5)),
+          const SizedBox(height: 8),
+          Text('Sistema de Inventario y Ventas',
+              style: TextStyle(color: Colors.white.withOpacity(0.8), fontSize: 14)),
+          const SizedBox(height: 48),
+          SizedBox(width: 28, height: 28, child: CircularProgressIndicator(
+              valueColor: AlwaysStoppedAnimation<Color>(Colors.white.withOpacity(0.7)),
+              strokeWidth: 2.5)),
+        ]),
+      ))),
+    ),
+  );
 }

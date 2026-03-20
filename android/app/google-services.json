@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "370694918896",
+    "project_id": "reyescompany-dbfd7",
+    "storage_bucket": "reyescompany-dbfd7.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:370694918896:android:b15f61c36227914b7e6835",
+        "android_client_info": {
+          "package_name": "com.example.flutter_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDytfxjdwHX8nBa2dqi7aKcor-u05g9fe8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
