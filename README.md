@@ -2,9 +2,13 @@
 
 Sistema de inventario y ventas (SIV).
 
-## Getting Started
+## Empezando
 
-This project is a starting point for a Flutter application.
+Este proyecto esta en desarrollo.
+
+Proyecto desarrollado en Dart con el framework Flutter
+
+Documentacion de flutter:
 
 A few resources to get you started if this is your first Flutter project:
 
