@@ -1,10 +1,8 @@
-// ══════════════════════════════════════════════════════
-//  login_screen.dart — ReyesCompany SIV v3.0
-// ══════════════════════════════════════════════════════
 import 'package:flutter/material.dart';
 import 'database_service.dart';
 import 'dashboard.dart';
 
+// Pantalla para que los usuarios entren al sistema
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
   @override
@@ -27,6 +25,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
   @override
   void initState() {
     super.initState();
+    // Configuracion de las animaciones de entrada
     _animCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 800));
     _slide = Tween<Offset>(begin: const Offset(0, 0.3), end: Offset.zero)
         .animate(CurvedAnimation(parent: _animCtrl, curve: Curves.easeOutCubic));
@@ -38,6 +37,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
   @override
   void dispose() { _emailCtrl.dispose(); _passCtrl.dispose(); _animCtrl.dispose(); super.dispose(); }
 
+  // Funcion para validar los datos y entrar al dashboard
   Future<void> _login() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _cargando = true);
@@ -76,6 +76,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
     final size = MediaQuery.of(context).size;
     return Scaffold(
       body: Stack(children: [
+        // Fondo con color azul
         Container(height: size.height * 0.42,
           decoration: const BoxDecoration(
             gradient: LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight,
@@ -86,6 +87,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
           padding: const EdgeInsets.symmetric(horizontal: 24),
           child: Column(children: [
             const SizedBox(height: 48),
+            // Logo y bienvenida
             FadeTransition(opacity: _fade, child: Column(children: [
               Container(width: 80, height: 80,
                 decoration: BoxDecoration(
@@ -100,6 +102,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
               Text('Bienvenido de vuelta', style: TextStyle(color: Colors.white.withOpacity(0.75), fontSize: 14)),
             ])),
             const SizedBox(height: 36),
+            // Cuadro del login
             Center(child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 460),
               child: SlideTransition(position: _slide, child: FadeTransition(opacity: _fade,
@@ -142,6 +145,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                       },
                     ),
                     const SizedBox(height: 32),
+                    // Boton para entrar
                     SizedBox(width: double.infinity, height: 52,
                       child: ElevatedButton(
                         onPressed: _cargando ? null : _login,
@@ -167,6 +171,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
 
   Widget _label(String t) => Text(t, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF2C3E50)));
 
+  // Estilo de los campos de texto
   InputDecoration _deco(String hint, IconData icon, {Widget? suffix}) => InputDecoration(
     hintText: hint, hintStyle: TextStyle(color: Colors.grey[400], fontSize: 14),
     prefixIcon: Icon(icon, color: const Color(0xFF2E86C1), size: 20), suffixIcon: suffix,

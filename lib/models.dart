@@ -1,6 +1,4 @@
-// ══════════════════════════════════════════════════════
-//  models.dart — ReyesCompany SIV v3.0 Realtime DB
-// ══════════════════════════════════════════════════════
+// Modelos de datos para el sistema ReyesCompany
 
 enum TipoVenta { contado, fiado }
 
@@ -10,7 +8,7 @@ extension TipoVentaExt on TipoVenta {
       s.toLowerCase() == 'fiado' ? TipoVenta.fiado : TipoVenta.contado;
 }
 
-// ── Sucursal ──────────────────────────────────────────
+// Clase para manejar la informacion de las sucursales
 class Sucursal {
   final String _id;
   String _nombre;
@@ -37,7 +35,7 @@ class Sucursal {
   String toString() => _nombre;
 }
 
-// ── Categoria ─────────────────────────────────────────
+// Clase para las categorias de los productos
 class Categoria {
   final String _id;
   String _nombre;
@@ -52,7 +50,7 @@ class Categoria {
   set nombre(String v)   => _nombre = v;
 }
 
-// ── MetodoPago ────────────────────────────────────────
+// Clase para los metodos de pago
 class MetodoPago {
   final String _id;
   String _nombre;
@@ -64,7 +62,6 @@ class MetodoPago {
   factory MetodoPago.fromMap(String id, Map<String, dynamic> d) =>
       MetodoPago(id: id, nombre: d['nombre'] ?? '', activo: d['activo'] ?? true);
 
-  // Compatibilidad con código existente
   factory MetodoPago.fromJson(Map<String, dynamic> j) => MetodoPago(
     id:     j['id']?.toString() ?? j['id_metodo_pago']?.toString() ?? '',
     nombre: j['nombre'] ?? '',
@@ -78,7 +75,7 @@ class MetodoPago {
   void desactivar()       => _activo = false;
 }
 
-// ── Producto ──────────────────────────────────────────
+// Clase para guardar los datos de los productos
 class Producto {
   final String _id;
   String _nombre;
@@ -146,7 +143,7 @@ class Producto {
   bool estaEnStockMinimo()   => _stockActual <= _stockMinimo;
 }
 
-// ── Cliente ───────────────────────────────────────────
+// Clase para la informacion de los clientes
 class Cliente {
   final String _id;
   String _nombre;
@@ -165,7 +162,6 @@ class Cliente {
     saldoPendiente: (d['saldo_pendiente'] as num?)?.toDouble() ?? 0,
   );
 
-  // Compatibilidad
   factory Cliente.fromJson(Map<String, dynamic> j) => Cliente(
     id:             j['id_cliente']?.toString() ?? '',
     nombre:         j['nombre']          ?? '',
@@ -188,7 +184,7 @@ class Cliente {
   void disminuirSaldo(double m) => _saldoPendiente -= m;
 }
 
-// ── Usuario ───────────────────────────────────────────
+// Clase para manejar los usuarios del sistema
 class Usuario {
   final String _id;
   String _nombre;
@@ -229,7 +225,7 @@ class Usuario {
   void cambiarRol(String r)        => _rol = r;
 }
 
-// ── DetalleVenta ──────────────────────────────────────
+// Detalle de los productos que se venden
 class DetalleVenta {
   final Producto _producto;
   int _cantidad;
@@ -252,7 +248,7 @@ class DetalleVenta {
   };
 }
 
-// ── Venta ─────────────────────────────────────────────
+// Informacion general de una venta realizada
 class Venta {
   final String _id;
   final String _fecha;

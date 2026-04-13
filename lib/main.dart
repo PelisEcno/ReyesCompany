@@ -1,7 +1,3 @@
-// ══════════════════════════════════════════════════════
-//  main.dart — ReyesCompany SIV v3.0
-//  Auto-login: si hay sesión activa salta el login
-// ══════════════════════════════════════════════════════
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
@@ -9,14 +5,13 @@ import 'firebase_options.dart';
 import 'login_screen.dart';
 import 'dashboard.dart';
 import 'database_service.dart';
-// import 'seed_screen.dart'; // Descomentar solo para inicializar
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   try {
     await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   } catch (_) {
-    // Ya inicializado (hot restart en Android)
+    // Si ya esta inicializado no hacemos nada
   }
   runApp(const ReyesCompanyApp());
 }
@@ -40,10 +35,7 @@ class ReyesCompanyApp extends StatelessWidget {
   }
 }
 
-// ── SplashScreen ─────────────────────────────────────
-// Muestra el logo mientras verifica si hay sesión activa.
-// Si hay sesión → va directo al Dashboard.
-// Si no hay sesión → va al Login.
+// Pantalla de carga que decide si ir al login o al inicio
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
   @override
@@ -65,14 +57,14 @@ class _SplashScreenState extends State<SplashScreen>
     _verificarSesion();
   }
 
+  // Revisamos si el usuario ya habia entrado antes
   Future<void> _verificarSesion() async {
     await Future.delayed(const Duration(milliseconds: 1500));
     if (!mounted) return;
 
     try {
       final user = FirebaseAuth.instance.currentUser;
-      debugPrint('=== SPLASH: currentUser = ${user?.uid ?? "null"}');
-
+      
       if (user == null) {
         Navigator.pushReplacementNamed(context, '/login');
         return;
@@ -80,7 +72,6 @@ class _SplashScreenState extends State<SplashScreen>
 
       final svc  = DatabaseService();
       final snap = await svc.getUserProfile(user.uid);
-      debugPrint('=== SPLASH: perfil = $snap');
 
       if (!mounted) return;
       if (snap == null) {
@@ -89,6 +80,7 @@ class _SplashScreenState extends State<SplashScreen>
         return;
       }
 
+      // Si todo esta bien, entramos al dashboard
       Navigator.pushReplacement(context, MaterialPageRoute(
         builder: (_) => DashboardScreen(
           usuario: UsuarioSesion(
@@ -101,7 +93,6 @@ class _SplashScreenState extends State<SplashScreen>
         ),
       ));
     } catch (e) {
-      debugPrint('=== SPLASH ERROR: $e');
       if (mounted) Navigator.pushReplacementNamed(context, '/login');
     }
   }

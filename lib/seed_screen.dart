@@ -1,7 +1,3 @@
-// ══════════════════════════════════════════════════════
-//  seed_screen.dart — Inicialización Realtime Database
-//  Ejecutar UNA sola vez
-// ══════════════════════════════════════════════════════
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/material.dart';
@@ -20,31 +16,32 @@ class _SeedScreenState extends State<SeedScreen> {
 
   void _log(String msg) => setState(() => _logs.add(msg));
 
+  // Funcion para cargar los datos iniciales en la base de datos
   Future<void> _seed() async {
     setState(() { _ejecutando = true; _logs.clear(); });
     try {
 
-      // ── Sucursales ──────────────────────────────
+      // Creamos las sucursales iniciales
       _log('Creando sucursales...');
       await _db.ref('sucursales/sucursal_1').set({'nombre': 'Sucursal Principal', 'direccion': '', 'telefono': '', 'estado': true});
       await _db.ref('sucursales/sucursal_2').set({'nombre': 'Sucursal 2', 'direccion': '', 'telefono': '', 'estado': true});
       _log('✅ Sucursales creadas');
 
-      // ── Categorías ──────────────────────────────
+      // Lista de categorias por defecto
       _log('Creando categorías...');
       for (final cat in ['Bebidas', 'Alimentos', 'Aseo', 'Licores', 'Snacks']) {
         await _db.ref('categorias').push().set({'nombre': cat});
       }
       _log('✅ Categorías creadas');
 
-      // ── Métodos de pago ─────────────────────────
+      // Metodos de pago basicos
       _log('Creando métodos de pago...');
       for (final m in ['Efectivo', 'Nequi', 'Daviplata', 'Fiado']) {
         await _db.ref('metodos_pago').push().set({'nombre': m, 'activo': true});
       }
       _log('✅ Métodos de pago creados');
 
-      // ── Usuario Admin ───────────────────────────
+      // Configuramos el usuario administrador por defecto
       _log('Creando usuario administrador...');
       try {
         final cred = await _auth.createUserWithEmailAndPassword(
@@ -92,14 +89,14 @@ class _SeedScreenState extends State<SeedScreen> {
           Container(
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(color: Colors.orange.shade50, borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.orange.shade200)),
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            child: const Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Row(children: [
-                Icon(Icons.warning_amber_rounded, color: Colors.orange.shade700),
-                const SizedBox(width: 8),
-                Text('Solo ejecutar UNA vez', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.orange.shade700, fontSize: 16)),
+                Icon(Icons.warning_amber_rounded, color: Colors.orange),
+                SizedBox(width: 8),
+                Text('Solo ejecutar UNA vez', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.orange, fontSize: 16)),
               ]),
-              const SizedBox(height: 8),
-              const Text('Crea en Firebase Realtime Database:\n• 2 sucursales\n• Categorías de productos\n• Métodos de pago\n• Usuario administrador'),
+              SizedBox(height: 8),
+              Text('Crea en Firebase Realtime Database:\n• 2 sucursales\n• Categorías de productos\n• Métodos de pago\n• Usuario administrador'),
             ]),
           ),
           const SizedBox(height: 24),

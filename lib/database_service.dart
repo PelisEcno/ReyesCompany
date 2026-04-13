@@ -1,7 +1,3 @@
-// ══════════════════════════════════════════════════════
-//  database_service.dart — ReyesCompany SIV v3.0
-//  Firebase Realtime Database — Servicio central
-// ══════════════════════════════════════════════════════
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'models.dart';
@@ -14,6 +10,7 @@ class DatabaseService {
   final FirebaseDatabase _db   = FirebaseDatabase.instance;
   final FirebaseAuth     _auth = FirebaseAuth.instance;
 
+  // Referencias a la base de datos
   DatabaseReference get _usuarios    => _db.ref('usuarios');
   DatabaseReference get _sucursales  => _db.ref('sucursales');
   DatabaseReference get _productos   => _db.ref('productos');
@@ -26,7 +23,7 @@ class DatabaseService {
 
   String get currentUserId => _auth.currentUser?.uid ?? '';
 
-  // ─── Helpers ─────────────────────────────────────────
+  // Formato simple para la fecha de hoy
   String _hoy() {
     final n = DateTime.now();
     return '${n.year}-${n.month.toString().padLeft(2,'0')}-${n.day.toString().padLeft(2,'0')}';
@@ -34,9 +31,7 @@ class DatabaseService {
 
   Map<String, dynamic> _map(dynamic v) => Map<String, dynamic>.from(v as Map);
 
-  // ════════════════════════════════════════════════════
-  //  AUTH
-  // ════════════════════════════════════════════════════
+  // Metodo para loguear usuarios
   Future<Map<String, dynamic>?> login(String email, String password) async {
     try {
       final cred = await _auth.signInWithEmailAndPassword(email: email, password: password);
@@ -59,7 +54,7 @@ class DatabaseService {
 
   Future<void> logout() => _auth.signOut();
 
-  /// Carga el perfil de un usuario ya autenticado (para auto-login desde splash)
+  // Traer datos del usuario que ya esta logueado
   Future<Map<String, dynamic>?> getUserProfile(String uid) async {
     final snap = await _usuarios.child(uid).get();
     if (!snap.exists) return null;
@@ -90,9 +85,6 @@ class DatabaseService {
     }
   }
 
-  // ════════════════════════════════════════════════════
-  //  SUCURSALES
-  // ════════════════════════════════════════════════════
   Future<List<Sucursal>> getSucursales() async {
     final snap = await _sucursales.get();
     if (!snap.exists) return [];
@@ -102,9 +94,6 @@ class DatabaseService {
         .toList()..sort((a,b) => a.nombre.compareTo(b.nombre));
   }
 
-  // ════════════════════════════════════════════════════
-  //  CATEGORÍAS
-  // ════════════════════════════════════════════════════
   Future<List<Categoria>> getCategorias() async {
     final snap = await _categorias.get();
     if (!snap.exists) return [];
@@ -116,9 +105,6 @@ class DatabaseService {
   Future<void> crearCategoria(String nombre) =>
       _categorias.push().set({'nombre': nombre});
 
-  // ════════════════════════════════════════════════════
-  //  MÉTODOS DE PAGO
-  // ════════════════════════════════════════════════════
   Future<List<MetodoPago>> getMetodosPago() async {
     final snap = await _metodosPago.get();
     if (!snap.exists) return [];
@@ -128,9 +114,7 @@ class DatabaseService {
         .toList()..sort((a,b) => a.nombre.compareTo(b.nombre));
   }
 
-  // ════════════════════════════════════════════════════
-  //  PRODUCTOS e INVENTARIO
-  // ════════════════════════════════════════════════════
+  // Traer los productos y filtrar por sucursal si se necesita
   Future<List<Producto>> getProductos({String? idSucursal}) async {
     final snapP = await _productos.orderByChild('nombre').get();
     if (!snapP.exists) return [];
@@ -145,14 +129,12 @@ class DatabaseService {
       int stock = 0, stockMin = 0;
 
       if (idSucursal != null) {
-        // Solo productos que EXISTEN en esta sucursal (tienen nodo de inventario)
         final key = '${e.key}_$idSucursal';
-        if (!mapI.containsKey(key)) continue; // No pertenece a esta sucursal → omitir
+        if (!mapI.containsKey(key)) continue;
         final inv = _map(mapI[key]);
         stock    = (inv['stock']        as num?)?.toInt() ?? 0;
         stockMin = (inv['stock_minimo'] as num?)?.toInt() ?? 0;
       } else {
-        // Admin "todas": muestra el stock más alto entre sucursales
         for (final inv in mapI.entries) {
           if ((inv.key as String).startsWith('${e.key}_')) {
             final d = _map(inv.value);
@@ -179,7 +161,7 @@ class DatabaseService {
     required String idCategoria, required String categoriaNombre,
     required double precioCompra, required double precioVenta,
     required int stockInicial, required int stockMinimo,
-    required String idSucursal, // SIEMPRE requerido — stock por sucursal
+    required String idSucursal,
   }) async {
     final ref = _productos.push();
     await ref.set({
@@ -200,7 +182,7 @@ class DatabaseService {
     required String idCategoria, required String categoriaNombre,
     required double precioCompra, required double precioVenta,
     required int stockActual, required int stockMinimo,
-    required String idSucursal, // SIEMPRE requerido
+    required String idSucursal,
   }) async {
     await _productos.child(idProducto).update({
       'nombre': nombre, 'descripcion': descripcion,
@@ -208,7 +190,6 @@ class DatabaseService {
       'precio_compra': precioCompra.toDouble(), 'precio_venta': precioVenta.toDouble(),
       'updated_at': ServerValue.timestamp,
     });
-    // Upsert del inventario de esa sucursal específica
     await _inventario.child('${idProducto}_$idSucursal').set({
       'id_producto': idProducto, 'id_sucursal': idSucursal,
       'stock': stockActual, 'stock_minimo': stockMinimo,
@@ -225,9 +206,7 @@ class DatabaseService {
     }
   }
 
-  // ════════════════════════════════════════════════════
-  //  VENTAS
-  // ════════════════════════════════════════════════════
+  // Guardar la venta y bajar el stock
   Future<String> registrarVenta({
     required String idUsuario, required String usuarioNombre,
     required String idSucursal, required String sucursalNombre,
@@ -236,7 +215,6 @@ class DatabaseService {
     String? idCliente, String clienteNombre = '',
     required List<Map<String, dynamic>> items, required double total,
   }) async {
-    // Verificar stock antes de registrar
     for (final item in items) {
       final invSnap = await _inventario.child('${item["id_producto"]}_$idSucursal').get();
       if (!invSnap.exists) throw Exception('Sin inventario: ${item["nombre_producto"]}');
@@ -256,7 +234,6 @@ class DatabaseService {
       'fecha': fechaStr, 'timestamp': ServerValue.timestamp, 'anulada': false,
     });
 
-    // Descontar stock
     for (final item in items) {
       final invKey  = '${item["id_producto"]}_$idSucursal';
       final invSnap = await _inventario.child(invKey).get();
@@ -265,7 +242,6 @@ class DatabaseService {
       await _inventario.child(invKey).update({'stock': nuevo < 0 ? 0 : nuevo});
     }
 
-    // Actualizar saldo fiado
     if (tipoVenta == 'Fiado' && idCliente != null) {
       final cSnap = await _clientes.child(idCliente).get();
       final saldo = (_map(cSnap.value)['saldo_pendiente'] as num?)?.toDouble() ?? 0;
@@ -293,7 +269,6 @@ class DatabaseService {
     final d = _map(snap.value);
     final idSuc = d['id_sucursal'] as String?;
 
-    // Devolver stock
     for (final item in (d['items'] as List? ?? [])) {
       final m = _map(item);
       if (idSuc != null) {
@@ -306,7 +281,6 @@ class DatabaseService {
       }
     }
 
-    // Revertir saldo fiado
     final idCli = d['id_cliente'] as String?;
     final total = (d['total'] as num?)?.toDouble() ?? 0;
     if (d['tipo_venta'] == 'Fiado' && idCli != null) {
@@ -318,9 +292,6 @@ class DatabaseService {
     await _ventas.child(idVenta).update({'anulada': true});
   }
 
-  // ════════════════════════════════════════════════════
-  //  CLIENTES
-  // ════════════════════════════════════════════════════
   Future<List<Cliente>> getClientes({String? idSucursal}) async {
     final snap = await _clientes.get();
     if (!snap.exists) return [];
@@ -354,6 +325,7 @@ class DatabaseService {
     await _clientes.child(id).remove();
   }
 
+  // Registrar pago de deuda del cliente
   Future<void> registrarAbono({
     required String idCliente, required String idUsuario,
     required String idSucursal,
@@ -403,9 +375,6 @@ class DatabaseService {
     }).toList()..sort((a,b) => (b['fecha'] as String).compareTo(a['fecha'] as String));
   }
 
-  // ════════════════════════════════════════════════════
-  //  USUARIOS
-  // ════════════════════════════════════════════════════
   Future<List<Usuario>> getUsuarios() async {
     final snapU = await _usuarios.get();
     if (!snapU.exists) return [];
@@ -443,19 +412,16 @@ class DatabaseService {
     await _auth.currentUser!.updatePassword(passwordNuevo);
   }
 
-  // ════════════════════════════════════════════════════
-  //  DASHBOARD — Resumen del día
-  // ════════════════════════════════════════════════════
+  // Resumen del dia para el dashboard
   Future<Map<String, dynamic>> getResumenDia({String? idSucursal}) async {
     final hoy = _hoy();
 
-    // ── Ventas del día ────────────────────────────────
     final snapV = await _ventas.orderByChild('fecha').equalTo(hoy).get();
-    double totalVentasContado = 0; // Solo efectivo/Nequi/Daviplata — dinero real
-    double totalVentasFiado   = 0; // Deuda generada hoy
+    double totalVentasContado = 0;
+    double totalVentasFiado   = 0;
     int cantVentas   = 0;
     int cantFiados   = 0;
-    final Map<String, Map<String, dynamic>> porMetodo = {}; // Solo métodos contado
+    final Map<String, Map<String, dynamic>> porMetodo = {};
     final movimientos = <Map<String, dynamic>>[];
 
     if (snapV.exists) {
@@ -471,7 +437,6 @@ class DatabaseService {
           totalVentasFiado += t;
           cantFiados++;
         } else {
-          // Solo ventas contado suman al total real del día
           totalVentasContado += t;
           cantVentas++;
           porMetodo.putIfAbsent(metodo, () => {'metodo': metodo, 'cantidad': 0, 'subtotal': 0.0});
@@ -490,7 +455,6 @@ class DatabaseService {
       }
     }
 
-    // ── Abonos del día ────────────────────────────────
     final snapA = await _abonos.orderByChild('fecha').equalTo(hoy).get();
     double totalAbonos = 0;
     int cantAbonos = 0;
@@ -498,7 +462,6 @@ class DatabaseService {
     if (snapA.exists) {
       for (final e in _map(snapA.value).entries) {
         final d = _map(e.value);
-        // Filtrar por sucursal — solo abonos de esta sucursal
         if (idSucursal != null && d['id_sucursal'] != idSucursal) continue;
         final m = (d['monto'] as num?)?.toDouble() ?? 0;
         totalAbonos += m;
@@ -513,7 +476,6 @@ class DatabaseService {
       }
     }
 
-    // ── Stock bajo ────────────────────────────────────
     final snapI = await _inventario.get();
     final Set<String> bajos = {};
     if (snapI.exists) {
@@ -527,13 +489,11 @@ class DatabaseService {
       }
     }
 
-    // ── Clientes con deuda ────────────────────────────
     final snapC = await _clientes.get();
     int cConDeuda = 0; double totalDeuda = 0;
     if (snapC.exists) {
       for (final e in _map(snapC.value).entries) {
         final d = _map(e.value);
-        // Solo clientes de esta sucursal
         if (idSucursal != null && d['id_sucursal'] != idSucursal) continue;
         final saldo = (d['saldo_pendiente'] as num?)?.toDouble() ?? 0;
         if (saldo > 0) { cConDeuda++; totalDeuda += saldo; }
@@ -543,18 +503,13 @@ class DatabaseService {
     movimientos.sort((a,b) => (b['timestamp'] as int).compareTo(a['timestamp'] as int));
 
     return {
-      // Dinero real que entró hoy (solo contado)
       'total_ventas':        totalVentasContado,
       'cantidad_ventas':     cantVentas,
-      // Fiados generados hoy (deuda, no dinero real)
       'total_fiados_hoy':    totalVentasFiado,
       'cantidad_fiados_hoy': cantFiados,
-      // Desglose por método (solo contado)
       'ventas_por_metodo':   porMetodo.values.toList(),
-      // Abonos cobrados hoy (dinero real de deudas anteriores)
       'total_abonos':        totalAbonos,
       'cantidad_abonos':     cantAbonos,
-      // Total dinero físico del día = contado + abonos cobrados
       'total_dia':           totalVentasContado + totalAbonos,
       'stock_bajo':          bajos.length,
       'clientes_con_deuda':  cConDeuda,
@@ -563,7 +518,6 @@ class DatabaseService {
     };
   }
 
-  // ── Resumen histórico (para reportes) ────────────────
   Future<Map<String, dynamic>> getResumenPeriodo({
     required String fechaInicio, required String fechaFin, String? idSucursal,
   }) async {
