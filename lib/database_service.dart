@@ -540,4 +540,226 @@ class DatabaseService {
     final dias = porDia.values.toList()..sort((a,b) => (a['fecha'] as String).compareTo(b['fecha'] as String));
     return {'total': total, 'cantidad': cantidad, 'por_dia': dias};
   }
+  // ═══════════════════════════════════════════════════════════════════════════
+  // ── Helper interno ───────────────────────────────────────────────────────
+  String _dateToStr(DateTime d) =>
+      '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
+  // ── CU03: Resumen de una fecha específica ─────────────────────────────────
+  Future<Map<String, dynamic>> getResumenFecha({
+    required DateTime fecha,
+    String? idSucursal,
+  }) async {
+    final fechaStr = _dateToStr(fecha);
+
+    // ── Ventas ──────────────────────────────────────────────────────────────
+    final snapV = await _ventas.orderByChild('fecha').equalTo(fechaStr).get();
+    double totalVentasContado = 0;
+    double totalVentasFiado   = 0;
+    int    cantVentas = 0;
+    int    cantFiados = 0;
+    final Map<String, Map<String, dynamic>> porMetodo   = {};
+    final Map<String, Map<String, dynamic>> porProducto = {};
+
+    if (snapV.exists) {
+      for (final e in _map(snapV.value).entries) {
+        final d = _map(e.value);
+        if (d['anulada'] == true) continue;
+        if (idSucursal != null && d['id_sucursal'] != idSucursal) continue;
+
+        final t       = (d['total'] as num?)?.toDouble() ?? 0;
+        final metodo  = d['metodo_pago_nombre']?.toString() ?? 'Efectivo';
+        final esFiado = d['tipo_venta']?.toString() == 'Fiado';
+
+        if (esFiado) {
+          totalVentasFiado += t;
+          cantFiados++;
+        } else {
+          totalVentasContado += t;
+          cantVentas++;
+          porMetodo.putIfAbsent(metodo, () => {'metodo': metodo, 'cantidad': 0, 'subtotal': 0.0});
+          porMetodo[metodo]!['cantidad'] = (porMetodo[metodo]!['cantidad'] as int) + 1;
+          porMetodo[metodo]!['subtotal'] = (porMetodo[metodo]!['subtotal'] as double) + t;
+        }
+
+        // Productos vendidos (para la tabla del resumen)
+        for (final item in (d['items'] as List? ?? [])) {
+          final it     = _map(item);
+          final idProd = it['id_producto']?.toString() ?? '';
+          final nombre = it['nombre_producto']?.toString() ?? 'Producto';
+          final cant   = (it['cantidad'] as num?)?.toInt() ?? 1;
+          final sub    = (it['subtotal'] as num?)?.toDouble()
+              ?? ((it['precio_unitario'] as num?)?.toDouble() ?? 0) * cant;
+          porProducto.putIfAbsent(idProd, () => {'nombre': nombre, 'cantidad': 0, 'total': 0.0});
+          porProducto[idProd]!['cantidad'] = (porProducto[idProd]!['cantidad'] as int) + cant;
+          porProducto[idProd]!['total']    = (porProducto[idProd]!['total'] as double) + sub;
+        }
+      }
+    }
+
+    // ── Abonos ──────────────────────────────────────────────────────────────
+    final snapA = await _abonos.orderByChild('fecha').equalTo(fechaStr).get();
+    double totalAbonos = 0;
+    int    cantAbonos  = 0;
+
+    if (snapA.exists) {
+      for (final e in _map(snapA.value).entries) {
+        final d = _map(e.value);
+        if (idSucursal != null && d['id_sucursal'] != idSucursal) continue;
+        totalAbonos += (d['monto'] as num?)?.toDouble() ?? 0;
+        cantAbonos++;
+      }
+    }
+
+    final productosLista = porProducto.values.toList()
+      ..sort((a, b) => (b['cantidad'] as int).compareTo(a['cantidad'] as int));
+
+    return {
+      'total_ventas':       totalVentasContado,
+      'cantidad_ventas':    cantVentas,
+      'total_fiados':       totalVentasFiado,
+      'cantidad_fiados':    cantFiados,
+      'total_abonos':       totalAbonos,
+      'cantidad_abonos':    cantAbonos,
+      'total_dia':          totalVentasContado + totalAbonos,
+      'ventas_por_metodo':  porMetodo.values.toList(),
+      'productos_vendidos': productosLista,
+    };
+  }
+
+  // ── CU07: Historial con filtros avanzados (solo Admin) ────────────────────
+  Future<List<Map<String, dynamic>>> getHistorialVentasFiltrado({
+    String? idSucursal,
+    DateTime? fechaDesde,
+    DateTime? fechaHasta,
+    String? tipo,      // 'venta' | 'abono' | 'fiado' | null = todos
+    String? metodo,    // 'Efectivo' | 'Nequi' … | null = todos
+    String? busqueda,  // filtra por nombre de cliente o producto
+    int limite  = 30,
+    int offset  = 0,
+  }) async {
+    final desde = fechaDesde != null ? _dateToStr(fechaDesde) : '2000-01-01';
+    final hasta = fechaHasta != null ? _dateToStr(fechaHasta) : _hoy();
+
+    final resultado = <Map<String, dynamic>>[];
+
+    // ── 1. Ventas / Fiados ─────────────────────────────────────────────────
+    if (tipo == null || tipo == 'venta' || tipo == 'fiado') {
+      final snapV = await _ventas
+          .orderByChild('fecha')
+          .startAt(desde)
+          .endAt(hasta)
+          .get();
+
+      if (snapV.exists) {
+        for (final e in _map(snapV.value).entries) {
+          final d = _map(e.value);
+          if (d['anulada'] == true) continue;
+          if (idSucursal != null && d['id_sucursal'] != idSucursal) continue;
+
+          final esFiado  = d['tipo_venta']?.toString() == 'Fiado';
+          final tipoReal = esFiado ? 'fiado' : 'venta';
+
+          // Filtro tipo exacto
+          if (tipo == 'venta' && esFiado)  continue;
+          if (tipo == 'fiado' && !esFiado) continue;
+
+          // Filtro método
+          final metodoPago = d['metodo_pago_nombre']?.toString() ?? '';
+          if (metodo != null &&
+              metodo.toLowerCase() != metodoPago.toLowerCase()) continue;
+
+          // Filtro búsqueda: cliente o cualquier producto del pedido
+          if (busqueda != null && busqueda.isNotEmpty) {
+            final q       = busqueda.toLowerCase();
+            final cliente = (d['cliente_nombre'] ?? '').toString().toLowerCase();
+            final enProd  = (d['items'] as List? ?? []).any((it) {
+              final m = _map(it);
+              return (m['nombre_producto'] ?? '').toString().toLowerCase().contains(q);
+            });
+            if (!cliente.contains(q) && !enProd) continue;
+          }
+
+          final productos = (d['items'] as List? ?? []).map((it) {
+            final m = _map(it);
+            final c = (m['cantidad'] as num?)?.toInt() ?? 1;
+            final p = (m['precio_unitario'] as num?)?.toDouble() ?? 0;
+            return <String, dynamic>{
+              'nombre':   m['nombre_producto'] ?? '',
+              'cantidad': c,
+              'subtotal': (m['subtotal'] as num?)?.toDouble() ?? (p * c),
+            };
+          }).toList();
+
+          resultado.add({
+            'id':        e.key,
+            'fecha':     d['fecha'] ?? desde,
+            'timestamp': (d['timestamp'] as num?)?.toInt() ?? 0,
+            'monto':     (d['total'] as num?)?.toDouble() ?? 0,
+            'metodo':    metodoPago,
+            'cliente':   d['cliente_nombre']  ?? 'Contado',
+            'usuario':   d['usuario_nombre']  ?? '',
+            'sucursal':  d['sucursal_nombre'] ?? '',
+            'tipo':      tipoReal,
+            'productos': productos,
+          });
+        }
+      }
+    }
+
+    // ── 2. Abonos ──────────────────────────────────────────────────────────
+    if (tipo == null || tipo == 'abono') {
+      final snapA = await _abonos
+          .orderByChild('fecha')
+          .startAt(desde)
+          .endAt(hasta)
+          .get();
+
+      if (snapA.exists) {
+        final snapU = await _usuarios.get();
+        final mapU  = snapU.exists ? _map(snapU.value) : <String, dynamic>{};
+        final snapC = await _clientes.get();
+        final mapC  = snapC.exists ? _map(snapC.value) : <String, dynamic>{};
+
+        for (final e in _map(snapA.value).entries) {
+          final d = _map(e.value);
+          if (idSucursal != null && d['id_sucursal'] != idSucursal) continue;
+
+          // Abonos no tienen método de pago → saltar filtro de método
+          if (metodo != null) continue;
+
+          final idU     = d['id_usuario'] as String?;
+          final idC     = d['id_cliente'] as String?;
+          final uNombre = idU != null && mapU.containsKey(idU)
+              ? (_map(mapU[idU])['nombre'] ?? '').toString() : '';
+          final cNombre = idC != null && mapC.containsKey(idC)
+              ? (_map(mapC[idC])['nombre'] ?? '').toString() : '';
+
+          if (busqueda != null && busqueda.isNotEmpty) {
+            if (!cNombre.toLowerCase().contains(busqueda.toLowerCase())) continue;
+          }
+
+          resultado.add({
+            'id':        e.key,
+            'fecha':     d['fecha'] ?? desde,
+            'timestamp': (d['timestamp'] as num?)?.toInt() ?? 0,
+            'monto':     (d['monto'] as num?)?.toDouble() ?? 0,
+            'metodo':    'Abono',
+            'cliente':   cNombre,
+            'usuario':   uNombre,
+            'sucursal':  d['sucursal_nombre'] ?? '',
+            'tipo':      'abono',
+            'productos': <Map<String, dynamic>>[],
+          });
+        }
+      }
+    }
+
+    // Ordenar por timestamp desc y paginar
+    resultado.sort((a, b) =>
+        (b['timestamp'] as int).compareTo(a['timestamp'] as int));
+
+    if (offset >= resultado.length) return [];
+    return resultado.sublist(offset, (offset + limite).clamp(0, resultado.length));
+  }
 }

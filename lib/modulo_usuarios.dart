@@ -110,11 +110,11 @@ class _ModuloUsuariosState extends State<ModuloUsuarios> {
                   items: [
                     const DropdownMenuItem<String?>(value: null, child: Row(children: [
                       Icon(Icons.store_mall_directory_rounded, size: 16, color: Colors.grey), SizedBox(width: 8),
-                      Text("Sin sucursal (Admin global)", style: TextStyle(fontSize: 13)),
+                      Flexible(child: Text("Sin sucursal (Admin global)", style: TextStyle(fontSize: 13), overflow: TextOverflow.ellipsis)),
                     ])),
                     ..._sucursales.map((s) => DropdownMenuItem<String?>(value: s.idSucursal, child: Row(children: [
                       const Icon(Icons.store_rounded, size: 16, color: _accent), const SizedBox(width: 8),
-                      Text(s.nombre, style: const TextStyle(fontSize: 13)),
+                      Flexible(child: Text(s.nombre, style: const TextStyle(fontSize: 13), overflow: TextOverflow.ellipsis)),
                     ]))),
                   ],
                   onChanged: (v) => setSt(() => sucursalSel = v),
@@ -231,7 +231,7 @@ class _ModuloUsuariosState extends State<ModuloUsuarios> {
       title: Row(children: [
         Icon(activar ? Icons.check_circle_rounded : Icons.block_rounded, color: activar ? _success : _danger),
         const SizedBox(width: 8),
-        Text(activar ? "Activar usuario" : "Desactivar usuario"),
+        Flexible(child: Text(activar ? "Activar usuario" : "Desactivar usuario")),
       ]),
       content: RichText(text: TextSpan(style: const TextStyle(color: Colors.black87, fontSize: 14), children: [
         TextSpan(text: activar ? "¿Activar a " : "¿Desactivar a "),
@@ -258,83 +258,220 @@ class _ModuloUsuariosState extends State<ModuloUsuarios> {
 
   @override
   Widget build(BuildContext context) {
-    final activos = _usuarios.where((u) => u.activo).length;
-    final admins  = _usuarios.where((u) => u.rol == "Administrador").length;
+    final esMovil  = MediaQuery.of(context).size.width < 700;
+    final activos  = _usuarios.where((u) => u.activo).length;
+    final admins   = _usuarios.where((u) => u.rol == "Administrador").length;
+    final padding  = esMovil ? 16.0 : 24.0;
+
     return Container(
-      color: _bg, padding: const EdgeInsets.all(24),
+      color: _bg,
+      padding: EdgeInsets.all(padding),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+
+        // ── Cabecera ────────────────────────────────────────────────────────
         Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
-          const Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text("Usuarios", style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: _primary)),
-            Text("Control de acceso y roles", style: TextStyle(fontSize: 13, color: Colors.grey)),
-          ]),
-          const Spacer(),
-          ElevatedButton.icon(onPressed: () => _abrirFormulario(),
-              icon: const Icon(Icons.person_add_rounded, size: 18), label: const Text("Nuevo usuario"),
-              style: ElevatedButton.styleFrom(backgroundColor: _primary, foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), elevation: 0)),
-        ]),
-        const SizedBox(height: 20),
-        Row(children: [
-          _metrica("Total", "${_usuarios.length}", Icons.people_alt_rounded, _accent),
-          const SizedBox(width: 12),
-          _metrica("Activos", "$activos", Icons.check_circle_rounded, _success),
-          const SizedBox(width: 12),
-          _metrica("Administradores", "$admins", Icons.admin_panel_settings_rounded, _warning),
+          const Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text("Usuarios", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: _primary)),
+            Text("Control de acceso y roles", style: TextStyle(fontSize: 12, color: Colors.grey)),
+          ])),
+          const SizedBox(width: 8),
+          ElevatedButton.icon(
+            onPressed: () => _abrirFormulario(),
+            icon: const Icon(Icons.person_add_rounded, size: 16),
+            label: Text(esMovil ? "Nuevo" : "Nuevo usuario", style: const TextStyle(fontSize: 13)),
+            style: ElevatedButton.styleFrom(
+                backgroundColor: _primary, foregroundColor: Colors.white,
+                padding: EdgeInsets.symmetric(horizontal: esMovil ? 12 : 18, vertical: 10),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), elevation: 0),
+          ),
         ]),
         const SizedBox(height: 16),
+
+        // ── Métricas ────────────────────────────────────────────────────────
         Row(children: [
-          Expanded(child: SizedBox(height: 44, child: TextField(
+          _metrica("Total",    "${_usuarios.length}", Icons.people_alt_rounded,           _accent),
+          const SizedBox(width: 10),
+          _metrica("Activos",  "$activos",            Icons.check_circle_rounded,          _success),
+          const SizedBox(width: 10),
+          _metrica(esMovil ? "Admins" : "Administradores", "$admins", Icons.admin_panel_settings_rounded, _warning),
+        ]),
+        const SizedBox(height: 14),
+
+        // ── Buscador ────────────────────────────────────────────────────────
+        Row(children: [
+          Expanded(child: SizedBox(height: 42, child: TextField(
             onChanged: (v) { _busqueda = v; _aplicarFiltro(); },
+            style: const TextStyle(fontSize: 13),
             decoration: InputDecoration(
               hintText: "Buscar usuario...", hintStyle: TextStyle(color: Colors.grey[400], fontSize: 13),
-              prefixIcon: const Icon(Icons.search_rounded, color: _accent, size: 20),
-              filled: true, fillColor: Colors.white, contentPadding: const EdgeInsets.symmetric(horizontal: 16),
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+              prefixIcon: const Icon(Icons.search_rounded, color: _accent, size: 18),
+              filled: true, fillColor: Colors.white, contentPadding: const EdgeInsets.symmetric(horizontal: 14),
+              border:        OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
               enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.grey[200]!)),
             ),
           ))),
           const SizedBox(width: 8),
-          SizedBox(height: 44, width: 44, child: OutlinedButton(
+          SizedBox(height: 42, width: 42, child: OutlinedButton(
             onPressed: _cargar,
-            style: OutlinedButton.styleFrom(padding: EdgeInsets.zero, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), side: BorderSide(color: Colors.grey[200]!), backgroundColor: Colors.white),
-            child: const Icon(Icons.refresh_rounded, color: _accent, size: 20),
+            style: OutlinedButton.styleFrom(
+                padding: EdgeInsets.zero,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                side: BorderSide(color: Colors.grey[200]!), backgroundColor: Colors.white),
+            child: const Icon(Icons.refresh_rounded, color: _accent, size: 18),
           )),
         ]),
-        const SizedBox(height: 16),
+        const SizedBox(height: 14),
+
+        // ── Lista ───────────────────────────────────────────────────────────
         Expanded(
-          child: _cargando ? const Center(child: CircularProgressIndicator(color: _accent))
-              : _filtrados.isEmpty ? _estadoVacio()
-              : Container(
-            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.grey[200]!),
-                boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8, offset: const Offset(0, 2))]),
-            child: ClipRRect(borderRadius: BorderRadius.circular(16), child: Column(children: [
-              Container(color: const Color(0xFFF8FAFB), padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                  child: const Row(children: [
-                    Expanded(flex: 3, child: Text("USUARIO",  style: _sHeader)),
-                    Expanded(flex: 2, child: Text("ROL",      style: _sHeader, textAlign: TextAlign.center)),
-                    Expanded(flex: 3, child: Text("SUCURSAL", style: _sHeader)),
-                    Expanded(flex: 1, child: Text("ESTADO",   style: _sHeader, textAlign: TextAlign.center)),
-                    SizedBox(width: 110),
-                  ])),
-              const Divider(height: 1, color: Color(0xFFEEF0F2)),
-              Expanded(child: ListView.separated(
-                itemCount: _filtrados.length,
-                separatorBuilder: (_, __) => const Divider(height: 1, color: Color(0xFFEEF0F2)),
-                itemBuilder: (_, i) => _filaUsuario(_filtrados[i]),
-              )),
-            ])),
-          ),
+          child: _cargando
+              ? const Center(child: CircularProgressIndicator(color: _accent))
+              : _filtrados.isEmpty
+              ? _estadoVacio()
+              : esMovil
+              ? _listaMovil()
+              : _tablaEscritorio(),
         ),
       ]),
     );
   }
 
-  Widget _filaUsuario(Usuario u) {
+  // ── Vista móvil: tarjetas ─────────────────────────────────────────────────
+  Widget _listaMovil() => Container(
+    decoration: BoxDecoration(
+        color: Colors.white, borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.grey[200]!),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8, offset: const Offset(0, 2))]),
+    child: ClipRRect(
+      borderRadius: BorderRadius.circular(16),
+      child: ListView.separated(
+        itemCount: _filtrados.length,
+        separatorBuilder: (_, __) => const Divider(height: 1, color: Color(0xFFEEF0F2)),
+        itemBuilder: (_, i) => _tarjetaMovil(_filtrados[i]),
+      ),
+    ),
+  );
+
+  Widget _tarjetaMovil(Usuario u) {
     final esMio   = u.idUsuario == widget.idUsuarioActual;
     final esAdmin = u.rol == "Administrador";
-    final esMovil = MediaQuery.of(context).size.width < 700;
+
+    return Container(
+      color: !u.activo ? _danger.withOpacity(0.02) : esMio ? _accent.withOpacity(0.02) : Colors.white,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
+
+        // Avatar
+        _avatar(u),
+        const SizedBox(width: 12),
+
+        // Info principal
+        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+
+          // Nombre + badge "Tú"
+          Row(children: [
+            Flexible(child: Text(u.nombre,
+                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14, color: Color(0xFF2C3E50)),
+                overflow: TextOverflow.ellipsis)),
+            if (esMio) ...[
+              const SizedBox(width: 6),
+              Container(padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(color: _accent, borderRadius: BorderRadius.circular(6)),
+                  child: const Text("Tú", style: TextStyle(fontSize: 10, color: Colors.white, fontWeight: FontWeight.bold))),
+            ],
+          ]),
+          const SizedBox(height: 2),
+
+          // Email
+          Text(u.email, style: TextStyle(fontSize: 11, color: Colors.grey[500]), overflow: TextOverflow.ellipsis),
+          const SizedBox(height: 6),
+
+          // Badges: rol + estado + sucursal
+          Wrap(spacing: 6, runSpacing: 4, children: [
+            _badge(
+              esAdmin ? "Admin" : "Empleado",
+              esAdmin ? Icons.admin_panel_settings_rounded : Icons.badge_rounded,
+              esAdmin ? _warning : _accent,
+            ),
+            _badge(
+              u.activo ? "Activo" : "Inactivo",
+              u.activo ? Icons.check_circle_rounded : Icons.block_rounded,
+              u.activo ? _success : _danger,
+              onTap: esMio ? null : () => _confirmarToggle(u),
+            ),
+            if (u.idSucursal != null)
+              _badge(
+                u.sucursalNombre.isNotEmpty ? u.sucursalNombre : u.idSucursal!,
+                Icons.store_rounded,
+                Colors.grey,
+              )
+            else
+              _badge("Global", Icons.store_mall_directory_rounded, Colors.grey),
+          ]),
+        ])),
+
+        // Acciones compactas en columna
+        const SizedBox(width: 8),
+        Column(mainAxisSize: MainAxisSize.min, children: [
+          _iconBtn(Icons.edit_rounded,       _accent,   () => _abrirFormulario(u: u)),
+          _iconBtn(Icons.lock_reset_rounded, _warning,  () => _abrirCambioPassword(u)),
+          if (!esMio)
+            _iconBtn(
+              u.activo ? Icons.block_rounded : Icons.check_circle_outline_rounded,
+              u.activo ? _danger : _success,
+                  () => _confirmarToggle(u),
+            ),
+        ]),
+      ]),
+    );
+  }
+
+  Widget _badge(String label, IconData icono, Color color, {VoidCallback? onTap}) => GestureDetector(
+    onTap: onTap,
+    child: Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(20)),
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
+        Icon(icono, size: 10, color: color),
+        const SizedBox(width: 3),
+        Text(label, style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: color)),
+      ]),
+    ),
+  );
+
+  // ── Vista escritorio: tabla ───────────────────────────────────────────────
+  Widget _tablaEscritorio() => Container(
+    decoration: BoxDecoration(
+        color: Colors.white, borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.grey[200]!),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8, offset: const Offset(0, 2))]),
+    child: ClipRRect(
+      borderRadius: BorderRadius.circular(16),
+      child: Column(children: [
+        Container(
+          color: const Color(0xFFF8FAFB),
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+          child: const Row(children: [
+            Expanded(flex: 3, child: Text("USUARIO",  style: _sHeader)),
+            Expanded(flex: 2, child: Text("ROL",      style: _sHeader, textAlign: TextAlign.center)),
+            Expanded(flex: 3, child: Text("SUCURSAL", style: _sHeader)),
+            Expanded(flex: 1, child: Text("ESTADO",   style: _sHeader, textAlign: TextAlign.center)),
+            SizedBox(width: 110),
+          ]),
+        ),
+        const Divider(height: 1, color: Color(0xFFEEF0F2)),
+        Expanded(child: ListView.separated(
+          itemCount: _filtrados.length,
+          separatorBuilder: (_, __) => const Divider(height: 1, color: Color(0xFFEEF0F2)),
+          itemBuilder: (_, i) => _filaEscritorio(_filtrados[i]),
+        )),
+      ]),
+    ),
+  );
+
+  Widget _filaEscritorio(Usuario u) {
+    final esMio   = u.idUsuario == widget.idUsuarioActual;
+    final esAdmin = u.rol == "Administrador";
 
     final rolBadge = Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
@@ -349,7 +486,8 @@ class _ModuloUsuariosState extends State<ModuloUsuarios> {
     final sucursalWidget = u.esAdminGlobal
         ? Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3), decoration: BoxDecoration(color: Colors.grey[100], borderRadius: BorderRadius.circular(20)),
         child: const Text("Global", style: TextStyle(fontSize: 11, color: Colors.grey, fontWeight: FontWeight.w600)))
-        : Text(u.sucursalNombre.isNotEmpty ? u.sucursalNombre : u.idSucursal ?? "—", style: TextStyle(fontSize: 13, color: Colors.grey[500]), overflow: TextOverflow.ellipsis);
+        : Text(u.sucursalNombre.isNotEmpty ? u.sucursalNombre : u.idSucursal ?? "—",
+        style: TextStyle(fontSize: 13, color: Colors.grey[500]), overflow: TextOverflow.ellipsis);
 
     final estadoBadge = GestureDetector(
       onTap: esMio ? null : () => _confirmarToggle(u),
@@ -358,29 +496,6 @@ class _ModuloUsuariosState extends State<ModuloUsuarios> {
           child: Text(u.activo ? "Activo" : "Inactivo", style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: u.activo ? _success : _danger))),
     );
 
-    final acciones = Row(mainAxisSize: MainAxisSize.min, children: [
-      _iconBtn(Icons.edit_rounded, _accent, () => _abrirFormulario(u: u)),
-      _iconBtn(Icons.lock_reset_rounded, _warning, () => _abrirCambioPassword(u)),
-      if (!esMio) _iconBtn(u.activo ? Icons.block_rounded : Icons.check_circle_outline_rounded,
-          u.activo ? _danger : _success, () => _confirmarToggle(u)),
-    ]);
-
-    if (esMovil) {
-      return Container(
-        color: !u.activo ? _danger.withOpacity(0.02) : esMio ? _accent.withOpacity(0.02) : Colors.white,
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        child: Row(children: [
-          _avatar(u), const SizedBox(width: 12),
-          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(u.nombre, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14, color: Color(0xFF2C3E50)), overflow: TextOverflow.ellipsis),
-            const SizedBox(height: 4),
-            Row(children: [rolBadge, const SizedBox(width: 6), estadoBadge]),
-          ])),
-          acciones,
-        ]),
-      );
-    }
-
     return Container(
       color: !u.activo ? _danger.withOpacity(0.02) : esMio ? _accent.withOpacity(0.02) : Colors.white,
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 13),
@@ -388,7 +503,9 @@ class _ModuloUsuariosState extends State<ModuloUsuarios> {
         Expanded(flex: 3, child: Row(children: [
           _avatar(u), const SizedBox(width: 10),
           Expanded(child: Row(children: [
-            Expanded(child: Text(u.nombre, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14, color: Color(0xFF2C3E50)), overflow: TextOverflow.ellipsis)),
+            Expanded(child: Text(u.nombre,
+                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14, color: Color(0xFF2C3E50)),
+                overflow: TextOverflow.ellipsis)),
             if (esMio) Container(margin: const EdgeInsets.only(left: 6), padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                 decoration: BoxDecoration(color: _accent, borderRadius: BorderRadius.circular(6)),
                 child: const Text("Tú", style: TextStyle(fontSize: 10, color: Colors.white, fontWeight: FontWeight.bold))),
@@ -400,8 +517,11 @@ class _ModuloUsuariosState extends State<ModuloUsuarios> {
         SizedBox(width: 110, child: Row(mainAxisAlignment: MainAxisAlignment.end, children: [
           _iconBtn(Icons.edit_rounded, _accent, () => _abrirFormulario(u: u)),
           _iconBtn(Icons.lock_reset_rounded, _warning, () => _abrirCambioPassword(u)),
-          if (!esMio) _iconBtn(u.activo ? Icons.block_rounded : Icons.check_circle_outline_rounded,
-              u.activo ? _danger : _success, () => _confirmarToggle(u)),
+          if (!esMio) _iconBtn(
+            u.activo ? Icons.block_rounded : Icons.check_circle_outline_rounded,
+            u.activo ? _danger : _success,
+                () => _confirmarToggle(u),
+          ),
         ])),
       ]),
     );
@@ -410,7 +530,8 @@ class _ModuloUsuariosState extends State<ModuloUsuarios> {
   Widget _avatar(Usuario u) {
     final color = u.rol == "Administrador" ? _warning : _accent;
     return CircleAvatar(radius: 18, backgroundColor: color.withOpacity(0.15),
-        child: Text(u.nombre.isNotEmpty ? u.nombre[0].toUpperCase() : 'U', style: TextStyle(fontWeight: FontWeight.bold, color: color, fontSize: 14)));
+        child: Text(u.nombre.isNotEmpty ? u.nombre[0].toUpperCase() : 'U',
+            style: TextStyle(fontWeight: FontWeight.bold, color: color, fontSize: 14)));
   }
 
   Widget _estadoVacio() => Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
@@ -419,27 +540,34 @@ class _ModuloUsuariosState extends State<ModuloUsuarios> {
     const SizedBox(height: 16),
     const Text("Sin usuarios", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF2C3E50))),
     const SizedBox(height: 20),
-    ElevatedButton.icon(onPressed: () => _abrirFormulario(), icon: const Icon(Icons.person_add_rounded, size: 18), label: const Text("Crear usuario"),
+    ElevatedButton.icon(onPressed: () => _abrirFormulario(),
+        icon: const Icon(Icons.person_add_rounded, size: 18), label: const Text("Crear usuario"),
         style: ElevatedButton.styleFrom(backgroundColor: _primary, foregroundColor: Colors.white,
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), elevation: 0)),
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), elevation: 0)),
   ]));
 
   Widget _metrica(String label, String valor, IconData icono, Color color) => Expanded(
-    child: Container(padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.grey[100]!),
-            boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 6, offset: const Offset(0, 2))]),
-        child: Row(children: [
-          Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(8)), child: Icon(icono, color: color, size: 18)),
-          const SizedBox(width: 10),
-          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(valor, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF2C3E50))),
-            Text(label, style: TextStyle(fontSize: 11, color: Colors.grey[400]), overflow: TextOverflow.ellipsis),
-          ])),
+    child: Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.grey[100]!),
+          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 6, offset: const Offset(0, 2))]),
+      child: Row(children: [
+        Container(padding: const EdgeInsets.all(7), decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
+            child: Icon(icono, color: color, size: 16)),
+        const SizedBox(width: 8),
+        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(valor, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF2C3E50))),
+          Text(label, style: TextStyle(fontSize: 10, color: Colors.grey[400]), overflow: TextOverflow.ellipsis),
         ])),
+      ]),
+    ),
   );
 
   Widget _iconBtn(IconData icon, Color color, VoidCallback? onTap) => GestureDetector(
-    onTap: onTap, child: Padding(padding: const EdgeInsets.all(6), child: Icon(icon, color: onTap == null ? Colors.grey[300] : color, size: 18)),
+    onTap: onTap,
+    child: Padding(padding: const EdgeInsets.all(6), child: Icon(icon, color: onTap == null ? Colors.grey[300] : color, size: 18)),
   );
 
   Widget _field(TextEditingController ctrl, String label, IconData icono, {bool obligatorio = false}) => TextFormField(

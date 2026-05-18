@@ -245,8 +245,8 @@ class _ModuloClientesState extends State<ModuloClientes> {
   ]));
 
   void _abrirAbono(Cliente c) {
-    final montoC = TextEditingController();
-    final obsC   = TextEditingController();
+    final montoC  = TextEditingController();
+    final obsC    = TextEditingController();
     final formKey = GlobalKey<FormState>();
     showModalBottomSheet(
       context: context, isScrollControlled: true, backgroundColor: Colors.transparent,
@@ -303,10 +303,10 @@ class _ModuloClientesState extends State<ModuloClientes> {
             ),
             const SizedBox(height: 12),
             Row(children: [
-              _botonMonto("25%", c.saldoPendiente * 0.25, montoC), const SizedBox(width: 8),
-              _botonMonto("50%", c.saldoPendiente * 0.50, montoC), const SizedBox(width: 8),
-              _botonMonto("75%", c.saldoPendiente * 0.75, montoC), const SizedBox(width: 8),
-              _botonMonto("Todo", c.saldoPendiente, montoC),
+              _botonMonto("25%",  c.saldoPendiente * 0.25, montoC), const SizedBox(width: 8),
+              _botonMonto("50%",  c.saldoPendiente * 0.50, montoC), const SizedBox(width: 8),
+              _botonMonto("75%",  c.saldoPendiente * 0.75, montoC), const SizedBox(width: 8),
+              _botonMonto("Todo", c.saldoPendiente,         montoC),
             ]),
             const SizedBox(height: 18),
             SizedBox(width: double.infinity, height: 52, child: ElevatedButton.icon(
@@ -358,128 +358,201 @@ class _ModuloClientesState extends State<ModuloClientes> {
 
   @override
   Widget build(BuildContext context) {
+    final esMovil    = MediaQuery.of(context).size.width < 700;
     final conDeuda   = _clientes.where((c) => c.saldoPendiente > 0).length;
     final totalDeuda = _clientes.fold<double>(0, (s, c) => s + c.saldoPendiente);
+    final padding    = esMovil ? 14.0 : 24.0;
+
     return Container(
-      color: _bg, padding: const EdgeInsets.all(24),
+      color: _bg,
+      padding: EdgeInsets.all(padding),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+
+        // ── Cabecera ─────────────────────────────────────────────────────────
         Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
-          const Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text("Clientes", style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: _primary)),
-            Text("Gestión de clientes y fiados", style: TextStyle(fontSize: 13, color: Colors.grey)),
-          ]),
-          const Spacer(),
-          ElevatedButton.icon(onPressed: () => _abrirFormulario(),
-              icon: const Icon(Icons.person_add_rounded, size: 18), label: const Text("Nuevo cliente"),
-              style: ElevatedButton.styleFrom(backgroundColor: _primary, foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), elevation: 0)),
+          const Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text("Clientes", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: _primary)),
+            Text("Gestión de clientes y fiados", style: TextStyle(fontSize: 12, color: Colors.grey)),
+          ])),
+          const SizedBox(width: 8),
+          ElevatedButton.icon(
+            onPressed: () => _abrirFormulario(),
+            icon: const Icon(Icons.person_add_rounded, size: 16),
+            label: Text(esMovil ? "Nuevo" : "Nuevo cliente", style: const TextStyle(fontSize: 13)),
+            style: ElevatedButton.styleFrom(
+                backgroundColor: _primary, foregroundColor: Colors.white,
+                padding: EdgeInsets.symmetric(horizontal: esMovil ? 12 : 18, vertical: 10),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), elevation: 0),
+          ),
         ]),
-        const SizedBox(height: 20),
+        const SizedBox(height: 14),
+
+        // ── Métricas ──────────────────────────────────────────────────────────
         Row(children: [
-          _metrica("Total clientes", "${_clientes.length}", Icons.people_alt_rounded, _accent),
-          const SizedBox(width: 12),
-          _metrica("Con deuda", "$conDeuda", Icons.warning_amber_rounded, _danger),
-          const SizedBox(width: 12),
-          _metrica("Total fiado", "\$${totalDeuda.toStringAsFixed(0)}", Icons.account_balance_wallet_rounded, _warning),
+          _metrica("Clientes",    "${_clientes.length}",              Icons.people_alt_rounded,          _accent,   esMovil),
+          const SizedBox(width: 8),
+          _metrica("Con deuda",   "$conDeuda",                        Icons.warning_amber_rounded,        _danger,   esMovil),
+          const SizedBox(width: 8),
+          _metrica("Total fiado", "\$${totalDeuda.toStringAsFixed(0)}", Icons.account_balance_wallet_rounded, _warning, esMovil),
         ]),
-        const SizedBox(height: 16),
+        const SizedBox(height: 12),
+
+        // ── Buscador ──────────────────────────────────────────────────────────
         Row(children: [
-          Expanded(child: SizedBox(height: 44, child: TextField(
+          Expanded(child: SizedBox(height: 42, child: TextField(
             onChanged: (v) { _busqueda = v; _aplicarFiltro(); },
+            style: const TextStyle(fontSize: 13),
             decoration: InputDecoration(
               hintText: "Buscar cliente...", hintStyle: TextStyle(color: Colors.grey[400], fontSize: 13),
-              prefixIcon: const Icon(Icons.search_rounded, color: _accent, size: 20),
-              filled: true, fillColor: Colors.white, contentPadding: const EdgeInsets.symmetric(horizontal: 16),
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+              prefixIcon: const Icon(Icons.search_rounded, color: _accent, size: 18),
+              filled: true, fillColor: Colors.white, contentPadding: const EdgeInsets.symmetric(horizontal: 14),
+              border:        OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
               enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.grey[200]!)),
             ),
           ))),
           const SizedBox(width: 8),
-          SizedBox(height: 44, width: 44, child: OutlinedButton(
+          SizedBox(height: 42, width: 42, child: OutlinedButton(
             onPressed: _cargarClientes,
-            style: OutlinedButton.styleFrom(padding: EdgeInsets.zero, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), side: BorderSide(color: Colors.grey[200]!), backgroundColor: Colors.white),
-            child: const Icon(Icons.refresh_rounded, color: _accent, size: 20),
+            style: OutlinedButton.styleFrom(
+                padding: EdgeInsets.zero,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                side: BorderSide(color: Colors.grey[200]!), backgroundColor: Colors.white),
+            child: const Icon(Icons.refresh_rounded, color: _accent, size: 18),
           )),
         ]),
-        const SizedBox(height: 16),
+        const SizedBox(height: 12),
+
+        // ── Tabla ─────────────────────────────────────────────────────────────
         Expanded(
-          child: _cargando ? const Center(child: CircularProgressIndicator(color: _accent))
-              : _filtrados.isEmpty ? _estadoVacio()
+          child: _cargando
+              ? const Center(child: CircularProgressIndicator(color: _accent))
+              : _filtrados.isEmpty
+              ? _estadoVacio()
               : Container(
-            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.grey[200]!),
+            decoration: BoxDecoration(
+                color: Colors.white, borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: Colors.grey[200]!),
                 boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8, offset: const Offset(0, 2))]),
-            child: ClipRRect(borderRadius: BorderRadius.circular(16), child: Column(children: [
-              Container(color: const Color(0xFFF8FAFB), padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                  child: const Row(children: [
-                    Expanded(flex: 3, child: Text("CLIENTE",   style: _estiloHeader)),
-                    Expanded(flex: 2, child: Text("TELÉFONO",  style: _estiloHeader)),
-                    Expanded(flex: 3, child: Text("DIRECCIÓN", style: _estiloHeader)),
-                    Expanded(flex: 2, child: Text("SALDO",     style: _estiloHeader, textAlign: TextAlign.right)),
-                    SizedBox(width: 100),
-                  ])),
-              const Divider(height: 1, color: Color(0xFFEEF0F2)),
-              Expanded(child: ListView.separated(
-                itemCount: _filtrados.length,
-                separatorBuilder: (_, __) => const Divider(height: 1, color: Color(0xFFEEF0F2)),
-                itemBuilder: (_, i) => _filaCliente(_filtrados[i]),
-              )),
-            ])),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(16),
+              child: Column(children: [
+                // Cabecera de tabla — adaptada por breakpoint
+                _cabeceraTabla(esMovil),
+                const Divider(height: 1, color: Color(0xFFEEF0F2)),
+                Expanded(child: ListView.separated(
+                  itemCount: _filtrados.length,
+                  separatorBuilder: (_, __) => const Divider(height: 1, color: Color(0xFFEEF0F2)),
+                  itemBuilder: (_, i) => _filaCliente(_filtrados[i], esMovil),
+                )),
+              ]),
+            ),
           ),
         ),
       ]),
     );
   }
 
-  Widget _filaCliente(Cliente c) {
+  // ── Cabecera tabla ────────────────────────────────────────────────────────
+  Widget _cabeceraTabla(bool esMovil) => Container(
+    color: const Color(0xFFF8FAFB),
+    padding: EdgeInsets.symmetric(horizontal: esMovil ? 14 : 20, vertical: 11),
+    child: esMovil
+        ? const Row(children: [
+      Expanded(flex: 5, child: Text("CLIENTE",  style: _estiloHeader)),
+      Expanded(flex: 3, child: Text("SALDO",    style: _estiloHeader, textAlign: TextAlign.center)),
+      SizedBox(width: 80,  child: Text("",      style: _estiloHeader)),
+    ])
+        : const Row(children: [
+      Expanded(flex: 3, child: Text("CLIENTE",   style: _estiloHeader)),
+      Expanded(flex: 2, child: Text("TELÉFONO",  style: _estiloHeader)),
+      Expanded(flex: 3, child: Text("DIRECCIÓN", style: _estiloHeader)),
+      Expanded(flex: 2, child: Text("SALDO",     style: _estiloHeader, textAlign: TextAlign.right)),
+      SizedBox(width: 100),
+    ]),
+  );
+
+  // ── Fila de cliente ───────────────────────────────────────────────────────
+  Widget _filaCliente(Cliente c, bool esMovil) {
     final tieneDeuda = c.saldoPendiente > 0;
-    final esMovil    = MediaQuery.of(context).size.width < 700;
+
     final saldoBadge = tieneDeuda
-        ? Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4), decoration: BoxDecoration(color: _danger.withOpacity(0.1), borderRadius: BorderRadius.circular(20)),
-        child: Text("\$${c.saldoPendiente.toStringAsFixed(0)}", style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: _danger)))
-        : Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4), decoration: BoxDecoration(color: _success.withOpacity(0.1), borderRadius: BorderRadius.circular(20)),
-        child: const Text("Al día", style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: _success)));
-    final acciones = Row(mainAxisSize: MainAxisSize.min, children: [
-      _iconBtn(Icons.payments_rounded, _success, tieneDeuda ? () => _abrirAbono(c) : null, size: 17),
-      _iconBtn(Icons.edit_rounded, _accent, () => _abrirFormulario(c: c), size: 17),
-      _iconBtn(Icons.delete_rounded, _danger, () => _confirmarEliminar(c), size: 17),
-    ]);
+        ? Container(
+        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+        decoration: BoxDecoration(color: _danger.withOpacity(0.1), borderRadius: BorderRadius.circular(20)),
+        child: Text("\$${c.saldoPendiente.toStringAsFixed(0)}",
+            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: _danger)))
+        : Container(
+        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+        decoration: BoxDecoration(color: _success.withOpacity(0.1), borderRadius: BorderRadius.circular(20)),
+        child: const Text("Al día", style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: _success)));
+
     return GestureDetector(
       onTap: () => _abrirDetalle(c),
       child: Container(
         color: tieneDeuda ? _danger.withOpacity(0.02) : Colors.white,
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 13),
-        child: esMovil
-            ? Row(children: [
-          CircleAvatar(radius: 20, backgroundColor: _accent.withOpacity(0.12),
-              child: Text(c.nombre[0].toUpperCase(), style: const TextStyle(fontWeight: FontWeight.bold, color: _accent, fontSize: 16))),
-          const SizedBox(width: 12),
-          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(c.nombre, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14, color: Color(0xFF2C3E50)), overflow: TextOverflow.ellipsis),
-            if (c.telefono.isNotEmpty) Text(c.telefono, style: TextStyle(fontSize: 12, color: Colors.grey[400])),
-          ])),
-          const SizedBox(width: 12),
-          Column(crossAxisAlignment: CrossAxisAlignment.end, children: [saldoBadge, const SizedBox(height: 4), acciones]),
-        ])
-            : Row(children: [
-          Expanded(flex: 3, child: Row(children: [
-            CircleAvatar(radius: 18, backgroundColor: _accent.withOpacity(0.12),
-                child: Text(c.nombre[0].toUpperCase(), style: const TextStyle(fontWeight: FontWeight.bold, color: _accent))),
-            const SizedBox(width: 10),
-            Expanded(child: Text(c.nombre, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14, color: Color(0xFF2C3E50)), overflow: TextOverflow.ellipsis)),
-          ])),
-          Expanded(flex: 2, child: Text(c.telefono.isNotEmpty ? c.telefono : "—", style: TextStyle(fontSize: 13, color: Colors.grey[500]))),
-          Expanded(flex: 3, child: Text(c.direccion.isNotEmpty ? c.direccion : "—", style: TextStyle(fontSize: 13, color: Colors.grey[500]), overflow: TextOverflow.ellipsis)),
-          Expanded(flex: 2, child: Align(alignment: Alignment.centerRight, child: saldoBadge)),
-          SizedBox(width: 100, child: Row(mainAxisAlignment: MainAxisAlignment.end, children: [
-            _iconBtn(Icons.payments_rounded, _success, tieneDeuda ? () => _abrirAbono(c) : null),
-            _iconBtn(Icons.edit_rounded, _accent, () => _abrirFormulario(c: c)),
-            _iconBtn(Icons.delete_rounded, _danger, () => _confirmarEliminar(c)),
-          ])),
-        ]),
+        padding: EdgeInsets.symmetric(horizontal: esMovil ? 14 : 20, vertical: esMovil ? 11 : 13),
+        child: esMovil ? _filaMobile(c, saldoBadge, tieneDeuda) : _filaDesktop(c, saldoBadge, tieneDeuda),
       ),
     );
   }
+
+  // ── Móvil: nombre + saldo + acciones en una sola fila ────────────────────
+  Widget _filaMobile(Cliente c, Widget saldoBadge, bool tieneDeuda) => Row(
+    crossAxisAlignment: CrossAxisAlignment.center,
+    children: [
+      // Avatar
+      CircleAvatar(radius: 18, backgroundColor: _accent.withOpacity(0.12),
+          child: Text(c.nombre[0].toUpperCase(),
+              style: const TextStyle(fontWeight: FontWeight.bold, color: _accent, fontSize: 15))),
+      const SizedBox(width: 10),
+
+      // Nombre + teléfono (si existe)
+      Expanded(flex: 5, child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(c.nombre,
+            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: Color(0xFF2C3E50)),
+            overflow: TextOverflow.ellipsis, maxLines: 1),
+        if (c.telefono.isNotEmpty)
+          Text(c.telefono, style: TextStyle(fontSize: 11, color: Colors.grey[400])),
+      ])),
+      const SizedBox(width: 8),
+
+      // Saldo centrado
+      Expanded(flex: 3, child: Center(child: saldoBadge)),
+
+      // Acciones: solo íconos sin padding excesivo
+      SizedBox(width: 80, child: Row(mainAxisAlignment: MainAxisAlignment.end, children: [
+        _iconBtn(Icons.payments_rounded, _success, tieneDeuda ? () => _abrirAbono(c) : null, size: 16),
+        _iconBtn(Icons.edit_rounded,     _accent,  () => _abrirFormulario(c: c),              size: 16),
+        _iconBtn(Icons.delete_rounded,   _danger,  () => _confirmarEliminar(c),               size: 16),
+      ])),
+    ],
+  );
+
+  // ── Desktop: tabla completa con todas las columnas ────────────────────────
+  Widget _filaDesktop(Cliente c, Widget saldoBadge, bool tieneDeuda) => Row(children: [
+    Expanded(flex: 3, child: Row(children: [
+      CircleAvatar(radius: 18, backgroundColor: _accent.withOpacity(0.12),
+          child: Text(c.nombre[0].toUpperCase(),
+              style: const TextStyle(fontWeight: FontWeight.bold, color: _accent))),
+      const SizedBox(width: 10),
+      Expanded(child: Text(c.nombre,
+          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14, color: Color(0xFF2C3E50)),
+          overflow: TextOverflow.ellipsis)),
+    ])),
+    Expanded(flex: 2, child: Text(
+        c.telefono.isNotEmpty ? c.telefono : "—",
+        style: TextStyle(fontSize: 13, color: Colors.grey[500]))),
+    Expanded(flex: 3, child: Text(
+        c.direccion.isNotEmpty ? c.direccion : "—",
+        style: TextStyle(fontSize: 13, color: Colors.grey[500]),
+        overflow: TextOverflow.ellipsis)),
+    Expanded(flex: 2, child: Align(alignment: Alignment.centerRight, child: saldoBadge)),
+    SizedBox(width: 100, child: Row(mainAxisAlignment: MainAxisAlignment.end, children: [
+      _iconBtn(Icons.payments_rounded, _success, tieneDeuda ? () => _abrirAbono(c) : null),
+      _iconBtn(Icons.edit_rounded,     _accent,  () => _abrirFormulario(c: c)),
+      _iconBtn(Icons.delete_rounded,   _danger,  () => _confirmarEliminar(c)),
+    ])),
+  ]);
 
   Widget _estadoVacio() => Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
     Container(padding: const EdgeInsets.all(24), decoration: BoxDecoration(color: _accent.withOpacity(0.08), shape: BoxShape.circle),
@@ -487,27 +560,45 @@ class _ModuloClientesState extends State<ModuloClientes> {
     const SizedBox(height: 16),
     const Text("Sin clientes", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF2C3E50))),
     const SizedBox(height: 20),
-    ElevatedButton.icon(onPressed: () => _abrirFormulario(), icon: const Icon(Icons.person_add_rounded, size: 18), label: const Text("Registrar cliente"),
+    ElevatedButton.icon(onPressed: () => _abrirFormulario(),
+        icon: const Icon(Icons.person_add_rounded, size: 18), label: const Text("Registrar cliente"),
         style: ElevatedButton.styleFrom(backgroundColor: _primary, foregroundColor: Colors.white,
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), elevation: 0)),
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), elevation: 0)),
   ]));
 
-  Widget _metrica(String label, String valor, IconData icono, Color color) => Expanded(
-    child: Container(padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.grey[100]!),
-            boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 6, offset: const Offset(0, 2))]),
-        child: Row(children: [
-          Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(8)), child: Icon(icono, color: color, size: 18)),
-          const SizedBox(width: 10),
-          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(valor, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF2C3E50))),
-            Text(label, style: TextStyle(fontSize: 11, color: Colors.grey[400]), overflow: TextOverflow.ellipsis),
-          ])),
-        ])),
+  Widget _metrica(String label, String valor, IconData icono, Color color, bool esMovil) => Expanded(
+    child: Container(
+      padding: EdgeInsets.symmetric(horizontal: esMovil ? 8 : 14, vertical: esMovil ? 10 : 12),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.grey[100]!),
+          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 6, offset: const Offset(0, 2))]),
+      child: esMovil
+          ? Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Container(padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(7)),
+                  child: Icon(icono, color: color, size: 14)),
+              const SizedBox(height: 6),
+              Text(valor, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFF2C3E50))),
+              Text(label, style: TextStyle(fontSize: 9, color: Colors.grey[400]), overflow: TextOverflow.ellipsis),
+            ])
+          : Row(children: [
+              Container(padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
+                  child: Icon(icono, color: color, size: 18)),
+              const SizedBox(width: 10),
+              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(valor, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF2C3E50))),
+                Text(label, style: TextStyle(fontSize: 11, color: Colors.grey[400]), overflow: TextOverflow.ellipsis),
+              ])),
+            ]),
+    ),
   );
 
   Widget _iconBtn(IconData icon, Color color, VoidCallback? onTap, {double size = 18}) => GestureDetector(
-    onTap: onTap, child: Padding(padding: const EdgeInsets.all(6), child: Icon(icon, color: onTap == null ? Colors.grey[300] : color, size: size)),
+    onTap: onTap,
+    child: Padding(padding: const EdgeInsets.all(5),
+        child: Icon(icon, color: onTap == null ? Colors.grey[300] : color, size: size)),
   );
 
   Widget _field(TextEditingController ctrl, String label, IconData icono, {bool obligatorio = false, bool esNum = false}) => TextFormField(
