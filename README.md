@@ -6,7 +6,9 @@ Sistema de inventario y ventas (SIV).
 
 Este proyecto esta en desarrollo.
 
-Proyecto desarrollado en Dart con el framework Flutter
+Proyecto desarrollado en Dart con el framework Flutter.
+
+Sitio actual desplegado temporalmente bajo el siguiente dominio: https://mistyrose-goldfish-676631.hostingersite.com/.
 
 Documentacion de flutter:
 
