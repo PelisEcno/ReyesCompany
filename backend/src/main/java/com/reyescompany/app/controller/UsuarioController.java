@@ -25,23 +25,35 @@ public class UsuarioController {
 
     @GetMapping
     public List<Usuario> listar() {
-        return usuarioService.listar();
+        List<Usuario> usuarios = usuarioService.listar();
+        for (Usuario usuario : usuarios) {
+            usuario.setPasswordHash(null);
+        }
+        return usuarios;
     }
 
     @GetMapping("/{id}")
     public Usuario buscarPorId(@PathVariable Integer id) {
-        return usuarioService.buscarPorId(id);
+        Usuario usuario = usuarioService.buscarPorId(id);
+        if (usuario != null) {
+            usuario.setPasswordHash(null);
+        }
+        return usuario;
     }
 
     @PostMapping
     public Usuario crear(@RequestBody Usuario usuario) {
-        return usuarioService.guardar(usuario);
+        Usuario creado = usuarioService.guardar(usuario);
+        creado.setPasswordHash(null);
+        return creado;
     }
 
     @PutMapping("/{id}")
     public Usuario actualizar(@PathVariable Integer id, @RequestBody Usuario usuario) {
         usuario.setIdUsuario(id);
-        return usuarioService.guardar(usuario);
+        Usuario actualizado = usuarioService.guardar(usuario);
+        actualizado.setPasswordHash(null);
+        return actualizado;
     }
 
     @DeleteMapping("/{id}")
