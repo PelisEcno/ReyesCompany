@@ -48,6 +48,16 @@ public class UsuarioService {
         return passwordEncoder.matches(passwordPlano, passwordHash);
     }
 
+    public Usuario cambiarPassword(Integer id, String passwordNuevo) {
+        Usuario usuario = usuarioRepository.findById(id).orElse(null);
+        if (usuario == null) {
+            return null;
+        }
+        usuario.setPasswordHash(passwordEncoder.encode(passwordNuevo));
+        usuario.setUpdatedAt(LocalDateTime.now());
+        return usuarioRepository.save(usuario);
+    }
+
     public void eliminar(Integer id) {
         usuarioRepository.deleteById(id);
     }

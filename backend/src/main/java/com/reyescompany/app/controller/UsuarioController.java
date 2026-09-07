@@ -1,5 +1,6 @@
 package com.reyescompany.app.controller;
 
+import com.reyescompany.app.model.CambiarPasswordRequest;
 import com.reyescompany.app.model.Usuario;
 import com.reyescompany.app.service.UsuarioService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -53,6 +54,15 @@ public class UsuarioController {
         usuario.setIdUsuario(id);
         Usuario actualizado = usuarioService.guardar(usuario);
         actualizado.setPasswordHash(null);
+        return actualizado;
+    }
+
+    @PutMapping("/{id}/password")
+    public Usuario cambiarPassword(@PathVariable Integer id, @RequestBody CambiarPasswordRequest request) {
+        Usuario actualizado = usuarioService.cambiarPassword(id, request.getPassword());
+        if (actualizado != null) {
+            actualizado.setPasswordHash(null);
+        }
         return actualizado;
     }
 
