@@ -366,37 +366,78 @@ class DatabaseService {
     await _ventas.child(idVenta).update({'anulada': true});
   }
 
+  // El cliente ya no tiene sucursal fija ni saldo guardado directo en tu modelo real:
+  // el saldo pendiente se calcula sumando las deudas (deuda_cliente) y restando los abonos.
   Future<List<Cliente>> getClientes({String? idSucursal}) async {
-    final snap = await _clientes.get();
-    if (!snap.exists) return [];
-    return _map(snap.value).entries
-        .where((e) {
-      if (idSucursal == null) return true;
-      return _map(e.value)['id_sucursal'] == idSucursal;
-    })
-        .map((e) => Cliente.fromMap(e.key, _map(e.value)))
-        .toList()..sort((a,b) => a.nombre.compareTo(b.nombre));
+    final respClientes = await http.get(Uri.parse('$_baseUrl/api/clientes'));
+    if (respClientes.statusCode != 200) throw Exception('Error al cargar clientes');
+    final respDeudas = await http.get(Uri.parse('$_baseUrl/api/deudas-cliente'));
+    final respAbonos = await http.get(Uri.parse('$_baseUrl/api/abonos'));
+
+    final clientes = jsonDecode(respClientes.body) as List;
+    final deudas = respDeudas.statusCode == 200 ? jsonDecode(respDeudas.body) as List : [];
+    final abonos = respAbonos.statusCode == 200 ? jsonDecode(respAbonos.body) as List : [];
+
+    final lista = <Cliente>[];
+    for (final c in clientes) {
+      final idCliente = c['idCliente'].toString();
+
+      final deudasCliente = deudas.where((d) => d['cliente']['idCliente'].toString() == idCliente).toList();
+      double totalDeuda = 0;
+      for (final d in deudasCliente) {
+        totalDeuda += (d['venta']['total'] as num?)?.toDouble() ?? 0;
+      }
+
+      final idsDeuda = deudasCliente.map((d) => d['idDeudaCliente'].toString()).toSet();
+      double totalAbonado = 0;
+      for (final a in abonos) {
+        if (idsDeuda.contains(a['deudaCliente']['idDeudaCliente'].toString())) {
+          totalAbonado += (a['monto'] as num?)?.toDouble() ?? 0;
+        }
+      }
+
+      lista.add(Cliente(
+        id: idCliente,
+        nombre: c['nombre'] ?? '',
+        telefono: c['telefono'] ?? '',
+        direccion: c['direccion'] ?? '',
+        saldoPendiente: (totalDeuda - totalAbonado).clamp(0, double.infinity),
+      ));
+    }
+
+    lista.sort((a, b) => a.nombre.compareTo(b.nombre));
+    return lista;
   }
 
   Future<void> crearCliente({
     required String nombre, required String idSucursal,
     String telefono = '', String direccion = '',
-  }) => _clientes.push().set({
-    'nombre': nombre, 'telefono': telefono, 'direccion': direccion,
-    'id_sucursal': idSucursal,
-    'saldo_pendiente': 0.0, 'created_at': ServerValue.timestamp,
-  });
+  }) async {
+    await http.post(
+      Uri.parse('$_baseUrl/api/clientes'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'nombre': nombre, 'apellido': '', 'telefono': telefono, 'direccion': direccion}),
+    );
+  }
 
   Future<void> editarCliente({
     required String id, required String nombre,
     String telefono = '', String direccion = '',
-  }) => _clientes.child(id).update({'nombre': nombre, 'telefono': telefono, 'direccion': direccion});
+  }) async {
+    await http.put(
+      Uri.parse('$_baseUrl/api/clientes/$id'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'nombre': nombre, 'apellido': '', 'telefono': telefono, 'direccion': direccion}),
+    );
+  }
 
   Future<void> eliminarCliente(String id) async {
-    final snap  = await _clientes.child(id).get();
-    final saldo = (_map(snap.value)['saldo_pendiente'] as num?)?.toDouble() ?? 0;
-    if (saldo > 0) throw Exception('No se puede eliminar un cliente con saldo pendiente (\$${saldo.toStringAsFixed(0)})');
-    await _clientes.child(id).remove();
+    final clientes = await getClientes();
+    final cliente = clientes.firstWhere((c) => c.idCliente == id, orElse: () => Cliente(id: id, nombre: ''));
+    if (cliente.saldoPendiente > 0) {
+      throw Exception('No se puede eliminar un cliente con saldo pendiente (\$${cliente.saldoPendiente.toStringAsFixed(0)})');
+    }
+    await http.delete(Uri.parse('$_baseUrl/api/clientes/$id'));
   }
 
   // Registrar pago de deuda del cliente
