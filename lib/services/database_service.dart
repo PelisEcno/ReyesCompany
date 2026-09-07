@@ -281,6 +281,22 @@ class DatabaseService {
   }
 
   // Guardar la venta y bajar el stock
+  // Tu modelo real exige un cliente en toda venta, incluso de contado.
+  // Si no se elige uno, usamos/creamos un cliente generico "Consumidor Final".
+  Future<String> _obtenerOCrearClienteGenerico() async {
+    final respClientes = await http.get(Uri.parse('$_baseUrl/api/clientes'));
+    final clientes = jsonDecode(respClientes.body) as List;
+    final existente = clientes.firstWhere((c) => c['nombre'] == 'Consumidor Final', orElse: () => null);
+    if (existente != null) return existente['idCliente'].toString();
+
+    final respNuevo = await http.post(
+      Uri.parse('$_baseUrl/api/clientes'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'nombre': 'Consumidor Final', 'apellido': '', 'telefono': '', 'direccion': ''}),
+    );
+    return jsonDecode(respNuevo.body)['idCliente'].toString();
+  }
+
   Future<String> registrarVenta({
     required String idUsuario, required String usuarioNombre,
     required String idSucursal, required String sucursalNombre,
@@ -289,81 +305,124 @@ class DatabaseService {
     String? idCliente, String clienteNombre = '',
     required List<Map<String, dynamic>> items, required double total,
   }) async {
+    final esFiado = tipoVenta == 'Fiado';
+    final clienteFinal = idCliente ?? await _obtenerOCrearClienteGenerico();
+
+    final respInventario = await http.get(Uri.parse('$_baseUrl/api/inventario'));
+    final inventarios = jsonDecode(respInventario.body) as List;
+
+    final itemsRequest = <Map<String, dynamic>>[];
     for (final item in items) {
-      final invSnap = await _inventario.child('${item["id_producto"]}_$idSucursal').get();
-      if (!invSnap.exists) throw Exception('Sin inventario: ${item["nombre_producto"]}');
-      final s = (_map(invSnap.value)['stock'] as num?)?.toInt() ?? 0;
-      if (s < (item['cantidad'] as int)) throw Exception('Stock insuficiente: ${item["nombre_producto"]} (disponible: $s)');
+      final idProducto = item['id_producto'] as String;
+      final inv = inventarios.firstWhere(
+        (i) => i['producto']['idProducto'].toString() == idProducto &&
+               i['sucursal']['idSucursal'].toString() == idSucursal,
+        orElse: () => null,
+      );
+      if (inv == null) throw Exception('Sin inventario: ${item["nombre_producto"]}');
+      final stock = (inv['stock'] as num?)?.toInt() ?? 0;
+      if (stock < (item['cantidad'] as int)) {
+        throw Exception('Stock insuficiente: ${item["nombre_producto"]} (disponible: $stock)');
+      }
+      itemsRequest.add({
+        'idInventario': inv['idInventario'],
+        'cantidad': item['cantidad'],
+        'precioUnitario': item['precio_unitario'],
+      });
     }
 
-    final ref = _ventas.push();
-    final fechaStr = _hoy();
+    final response = await http.post(
+      Uri.parse('$_baseUrl/api/ventas/registrar'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        'idUsuario': int.parse(idUsuario),
+        'idSucursal': int.parse(idSucursal),
+        'idCliente': int.parse(clienteFinal),
+        'idMetodoPago': esFiado ? null : int.parse(idMetodoPago),
+        'esFiado': esFiado,
+        'items': itemsRequest,
+      }),
+    );
 
-    await ref.set({
-      'id_usuario': idUsuario, 'usuario_nombre': usuarioNombre,
-      'id_sucursal': idSucursal, 'sucursal_nombre': sucursalNombre,
-      'id_metodo_pago': idMetodoPago, 'metodo_pago_nombre': metodoPagoNombre,
-      'tipo_venta': tipoVenta, 'id_cliente': idCliente, 'cliente_nombre': clienteNombre,
-      'total': total.toDouble(), 'items': items,
-      'fecha': fechaStr, 'timestamp': ServerValue.timestamp, 'anulada': false,
-    });
-
-    for (final item in items) {
-      final invKey  = '${item["id_producto"]}_$idSucursal';
-      final invSnap = await _inventario.child(invKey).get();
-      final inv     = _map(invSnap.value);
-      final nuevo   = ((inv['stock'] as num?)?.toInt() ?? 0) - (item['cantidad'] as int);
-      await _inventario.child(invKey).update({'stock': nuevo < 0 ? 0 : nuevo});
-    }
-
-    if (tipoVenta == 'Fiado' && idCliente != null) {
-      final cSnap = await _clientes.child(idCliente).get();
-      final saldo = (_map(cSnap.value)['saldo_pendiente'] as num?)?.toDouble() ?? 0;
-      await _clientes.child(idCliente).update({'saldo_pendiente': saldo + total});
-    }
-
-    return ref.key!;
+    if (response.statusCode != 200) throw Exception('No se pudo registrar la venta');
+    final venta = jsonDecode(response.body);
+    return venta['idVenta'].toString();
   }
 
   Future<List<Venta>> getHistorialVentas({String? idSucursal, String? fecha}) async {
-    final snap = await _ventas.orderByChild('fecha').equalTo(fecha ?? _hoy()).get();
-    if (!snap.exists) return [];
-    var lista = _map(snap.value).entries
-        .map((e) => Venta.fromMap(e.key, _map(e.value)))
-        .where((v) => !v.anulada)
-        .toList();
-    if (idSucursal != null) lista = lista.where((v) => v.idSucursal == idSucursal).toList();
-    lista.sort((a,b) => b.timestamp.compareTo(a.timestamp));
+    final hoy = fecha ?? _hoy();
+    final respVentas = await http.get(Uri.parse('$_baseUrl/api/ventas'));
+    final respPagos = await http.get(Uri.parse('$_baseUrl/api/pagos'));
+    final respDeudas = await http.get(Uri.parse('$_baseUrl/api/deudas-cliente'));
+
+    final ventas = jsonDecode(respVentas.body) as List;
+    final pagos = respPagos.statusCode == 200 ? jsonDecode(respPagos.body) as List : [];
+    final deudas = respDeudas.statusCode == 200 ? jsonDecode(respDeudas.body) as List : [];
+
+    final lista = <Venta>[];
+    for (final v in ventas) {
+      if (v['fecha'] != hoy) continue;
+      final idVenta = v['idVenta'].toString();
+      if (idSucursal != null && v['sucursal']['idSucursal'].toString() != idSucursal) continue;
+
+      final pago = pagos.firstWhere((p) => p['venta']['idVenta'].toString() == idVenta, orElse: () => null);
+      final deuda = deudas.firstWhere((d) => d['venta']['idVenta'].toString() == idVenta, orElse: () => null);
+
+      lista.add(Venta(
+        id: idVenta,
+        fecha: v['fecha'] ?? '',
+        idMetodoPago: pago != null ? pago['metodoPago']['idMetodoPago'].toString() : '',
+        metodoPagoNombre: pago != null ? (pago['metodoPago']['nombre'] ?? '') : 'Fiado',
+        idUsuario: v['usuario']['idUsuario'].toString(),
+        idCliente: v['cliente']['idCliente'].toString(),
+        clienteNombre: v['cliente']['nombre'] ?? '',
+        total: (v['total'] as num?)?.toDouble() ?? 0,
+        tipoVenta: deuda != null ? TipoVenta.fiado : TipoVenta.contado,
+        idSucursal: v['sucursal']['idSucursal'].toString(),
+        anulada: false,
+        timestamp: DateTime.parse(v['createdAt']).millisecondsSinceEpoch,
+      ));
+    }
+
+    lista.sort((a, b) => b.timestamp.compareTo(a.timestamp));
     return lista;
   }
 
+  // No existe columna "anulada" en tu modelo real: anular significa
+  // deshacer de verdad el detalle, el pago o la deuda, y devolver el stock.
   Future<void> anularVenta(String idVenta) async {
-    final snap = await _ventas.child(idVenta).get();
-    if (!snap.exists) throw Exception('Venta no encontrada');
-    final d = _map(snap.value);
-    final idSuc = d['id_sucursal'] as String?;
+    final respDetalles = await http.get(Uri.parse('$_baseUrl/api/detalle-venta'));
+    final detalles = jsonDecode(respDetalles.body) as List;
+    final propios = detalles.where((d) => d['venta']['idVenta'].toString() == idVenta).toList();
 
-    for (final item in (d['items'] as List? ?? [])) {
-      final m = _map(item);
-      if (idSuc != null) {
-        final invKey  = '${m["id_producto"]}_$idSuc';
-        final invSnap = await _inventario.child(invKey).get();
-        if (invSnap.exists) {
-          final s = (_map(invSnap.value)['stock'] as num?)?.toInt() ?? 0;
-          await _inventario.child(invKey).update({'stock': s + (m['cantidad'] as int)});
-        }
-      }
+    for (final d in propios) {
+      final inv = d['inventario'];
+      final stockActual = (inv['stock'] as num).toInt();
+      final cantidad = (d['cantidad'] as num).toInt();
+      await http.put(
+        Uri.parse('$_baseUrl/api/inventario/${inv['idInventario']}'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'stock': stockActual + cantidad,
+          'stockMinimo': inv['stockMinimo'],
+          'producto': {'idProducto': inv['producto']['idProducto']},
+          'sucursal': {'idSucursal': inv['sucursal']['idSucursal']},
+        }),
+      );
+      await http.delete(Uri.parse('$_baseUrl/api/detalle-venta/${d['idDetalleVenta']}'));
     }
 
-    final idCli = d['id_cliente'] as String?;
-    final total = (d['total'] as num?)?.toDouble() ?? 0;
-    if (d['tipo_venta'] == 'Fiado' && idCli != null) {
-      final cSnap = await _clientes.child(idCli).get();
-      final saldo = (_map(cSnap.value)['saldo_pendiente'] as num?)?.toDouble() ?? 0;
-      await _clientes.child(idCli).update({'saldo_pendiente': (saldo - total).clamp(0, double.infinity)});
-    }
+    final respPagos = await http.get(Uri.parse('$_baseUrl/api/pagos'));
+    final pagos = jsonDecode(respPagos.body) as List;
+    final pago = pagos.firstWhere((p) => p['venta']['idVenta'].toString() == idVenta, orElse: () => null);
+    if (pago != null) await http.delete(Uri.parse('$_baseUrl/api/pagos/${pago['idPago']}'));
 
-    await _ventas.child(idVenta).update({'anulada': true});
+    final respDeudas = await http.get(Uri.parse('$_baseUrl/api/deudas-cliente'));
+    final deudas = jsonDecode(respDeudas.body) as List;
+    final deuda = deudas.firstWhere((d) => d['venta']['idVenta'].toString() == idVenta, orElse: () => null);
+    if (deuda != null) await http.delete(Uri.parse('$_baseUrl/api/deudas-cliente/${deuda['idDeudaCliente']}'));
+
+    await http.delete(Uri.parse('$_baseUrl/api/ventas/$idVenta'));
   }
 
   // El cliente ya no tiene sucursal fija ni saldo guardado directo en tu modelo real:
@@ -440,54 +499,99 @@ class DatabaseService {
     await http.delete(Uri.parse('$_baseUrl/api/clientes/$id'));
   }
 
-  // Registrar pago de deuda del cliente
+  // Tu modelo real no guarda un saldo fijo: cada abono se aplica contra
+  // las deudas (deuda_cliente) mas antiguas del cliente hasta completar el monto.
   Future<void> registrarAbono({
     required String idCliente, required String idUsuario,
     required String idSucursal,
     required double monto, String observacion = '',
   }) async {
-    final snap  = await _clientes.child(idCliente).get();
-    final saldo = (_map(snap.value)['saldo_pendiente'] as num?)?.toDouble() ?? 0;
     if (monto <= 0) throw Exception('El monto debe ser mayor a 0');
-    if (monto > saldo) throw Exception('El abono (\$${monto.toStringAsFixed(0)}) supera el saldo (\$${saldo.toStringAsFixed(0)})');
-    await _clientes.child(idCliente).update({'saldo_pendiente': (saldo - monto).clamp(0, double.infinity)});
-    await _abonos.push().set({
-      'id_cliente': idCliente, 'id_usuario': idUsuario,
-      'id_sucursal': idSucursal,
-      'monto': monto.toDouble(), 'observacion': observacion,
-      'fecha': _hoy(), 'timestamp': ServerValue.timestamp,
-    });
+
+    final respDeudas = await http.get(Uri.parse('$_baseUrl/api/deudas-cliente'));
+    final respAbonos = await http.get(Uri.parse('$_baseUrl/api/abonos'));
+    final deudas = jsonDecode(respDeudas.body) as List;
+    final abonos = jsonDecode(respAbonos.body) as List;
+
+    final deudasCliente = deudas.where((d) => d['cliente']['idCliente'].toString() == idCliente).toList()
+      ..sort((a, b) => (a['fechaDeuda'] as String).compareTo(b['fechaDeuda'] as String));
+
+    double saldoTotal = 0;
+    final pendientes = <Map<String, dynamic>>[];
+    for (final d in deudasCliente) {
+      final totalDeuda = (d['venta']['total'] as num?)?.toDouble() ?? 0;
+      double abonado = 0;
+      for (final a in abonos) {
+        if (a['deudaCliente']['idDeudaCliente'].toString() == d['idDeudaCliente'].toString()) {
+          abonado += (a['monto'] as num?)?.toDouble() ?? 0;
+        }
+      }
+      final pendiente = totalDeuda - abonado;
+      saldoTotal += pendiente;
+      if (pendiente > 0) pendientes.add({'idDeudaCliente': d['idDeudaCliente'], 'pendiente': pendiente});
+    }
+
+    if (monto > saldoTotal) {
+      throw Exception('El abono (\$${monto.toStringAsFixed(0)}) supera el saldo (\$${saldoTotal.toStringAsFixed(0)})');
+    }
+
+    double restante = monto;
+    for (final p in pendientes) {
+      if (restante <= 0) break;
+      final pendiente = p['pendiente'] as double;
+      final aplicar = restante < pendiente ? restante : pendiente;
+      await http.post(
+        Uri.parse('$_baseUrl/api/abonos'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'monto': aplicar,
+          'fecha': _hoy(),
+          'deudaCliente': {'idDeudaCliente': p['idDeudaCliente']},
+        }),
+      );
+      restante -= aplicar;
+    }
   }
 
   Future<List<Map<String, dynamic>>> getHistorialFiados(String idCliente) async {
-    final snap = await _ventas.orderByChild('id_cliente').equalTo(idCliente).get();
-    if (!snap.exists) return [];
-    return _map(snap.value).entries
-        .where((e) {
-      final d = _map(e.value);
-      return d['tipo_venta'] == 'Fiado' && d['anulada'] != true;
-    })
-        .map((e) {
-      final d = _map(e.value);
-      return {'id_venta': e.key, 'fecha': d['fecha'] ?? '', 'total': d['total'] ?? 0, 'sucursal_nombre': d['sucursal_nombre'] ?? ''};
-    })
-        .toList()..sort((a,b) => (b['fecha'] as String).compareTo(a['fecha'] as String));
+    final respDeudas = await http.get(Uri.parse('$_baseUrl/api/deudas-cliente'));
+    final deudas = jsonDecode(respDeudas.body) as List;
+    final propias = deudas.where((d) => d['cliente']['idCliente'].toString() == idCliente).toList();
+
+    final lista = propias.map((d) => {
+      'id_venta': d['venta']['idVenta'].toString(),
+      'fecha': d['venta']['fecha'] ?? '',
+      'total': d['venta']['total'] ?? 0,
+      'sucursal_nombre': d['venta']['sucursal'] != null ? (d['venta']['sucursal']['nombre'] ?? '') : '',
+    }).toList();
+
+    lista.sort((a, b) => (b['fecha'] as String).compareTo(a['fecha'] as String));
+    return lista;
   }
 
   Future<List<Map<String, dynamic>>> getHistorialAbonos(String idCliente) async {
-    final snap = await _abonos.orderByChild('id_cliente').equalTo(idCliente).get();
-    if (!snap.exists) return [];
-    final snapU = await _usuarios.get();
-    final mapU  = snapU.exists ? _map(snapU.value) : <String, dynamic>{};
+    final respDeudas = await http.get(Uri.parse('$_baseUrl/api/deudas-cliente'));
+    final respAbonos = await http.get(Uri.parse('$_baseUrl/api/abonos'));
+    final deudas = jsonDecode(respDeudas.body) as List;
+    final abonos = jsonDecode(respAbonos.body) as List;
 
-    return _map(snap.value).entries.map((e) {
-      final d         = _map(e.value);
-      final idU       = d['id_usuario'] as String?;
-      String uNombre  = '';
-      if (idU != null && mapU.containsKey(idU)) uNombre = _map(mapU[idU])['nombre'] ?? '';
-      return {'id_abono': e.key, 'monto': d['monto'] ?? 0, 'fecha': d['fecha'] ?? '',
-        'observacion': d['observacion'] ?? '', 'usuario_nombre': uNombre};
-    }).toList()..sort((a,b) => (b['fecha'] as String).compareTo(a['fecha'] as String));
+    final idsDeuda = deudas
+        .where((d) => d['cliente']['idCliente'].toString() == idCliente)
+        .map((d) => d['idDeudaCliente'].toString())
+        .toSet();
+
+    final propios = abonos.where((a) => idsDeuda.contains(a['deudaCliente']['idDeudaCliente'].toString())).toList();
+
+    final lista = propios.map((a) => {
+      'id_abono': a['idAbono'].toString(),
+      'monto': a['monto'] ?? 0,
+      'fecha': a['fecha'] ?? '',
+      'observacion': '',
+      'usuario_nombre': '',
+    }).toList();
+
+    lista.sort((a, b) => (b['fecha'] as String).compareTo(a['fecha'] as String));
+    return lista;
   }
 
   // Ya no existe sucursal fija por usuario en tu modelo real, el rol ahora es una tabla aparte
@@ -603,92 +707,67 @@ class DatabaseService {
   // Resumen del dia para el dashboard
   Future<Map<String, dynamic>> getResumenDia({String? idSucursal}) async {
     final hoy = _hoy();
+    final ventasHoy = await getHistorialVentas(idSucursal: idSucursal, fecha: hoy);
 
-    final snapV = await _ventas.orderByChild('fecha').equalTo(hoy).get();
     double totalVentasContado = 0;
     double totalVentasFiado   = 0;
-    int cantVentas   = 0;
-    int cantFiados   = 0;
+    int cantVentas = 0;
+    int cantFiados = 0;
     final Map<String, Map<String, dynamic>> porMetodo = {};
     final movimientos = <Map<String, dynamic>>[];
 
-    if (snapV.exists) {
-      for (final e in _map(snapV.value).entries) {
-        final d = _map(e.value);
-        if (d['anulada'] == true) continue;
-        if (idSucursal != null && d['id_sucursal'] != idSucursal) continue;
-        final t      = (d['total'] as num?)?.toDouble() ?? 0;
-        final metodo = d['metodo_pago_nombre']?.toString() ?? 'Efectivo';
-        final esFiado = d['tipo_venta']?.toString() == 'Fiado';
-
-        if (esFiado) {
-          totalVentasFiado += t;
-          cantFiados++;
-        } else {
-          totalVentasContado += t;
-          cantVentas++;
-          porMetodo.putIfAbsent(metodo, () => {'metodo': metodo, 'cantidad': 0, 'subtotal': 0.0});
-          porMetodo[metodo]!['cantidad'] = (porMetodo[metodo]!['cantidad'] as int) + 1;
-          porMetodo[metodo]!['subtotal'] = (porMetodo[metodo]!['subtotal'] as double) + t;
-        }
-
-        movimientos.add({
-          'tipo': 'venta', 'id': e.key, 'monto': t,
-          'nombre_cliente': d['cliente_nombre'] ?? 'Contado',
-          'metodo': metodo, 'usuario': d['usuario_nombre'] ?? '',
-          'sucursal': d['sucursal_nombre'] ?? '', 'observacion': '',
-          'es_fiado': esFiado,
-          'timestamp': (d['timestamp'] as num?)?.toInt() ?? 0,
-        });
+    for (final v in ventasHoy) {
+      if (v.esFiado) {
+        totalVentasFiado += v.total;
+        cantFiados++;
+      } else {
+        totalVentasContado += v.total;
+        cantVentas++;
+        porMetodo.putIfAbsent(v.metodoPagoNombre, () => {'metodo': v.metodoPagoNombre, 'cantidad': 0, 'subtotal': 0.0});
+        porMetodo[v.metodoPagoNombre]!['cantidad'] = (porMetodo[v.metodoPagoNombre]!['cantidad'] as int) + 1;
+        porMetodo[v.metodoPagoNombre]!['subtotal'] = (porMetodo[v.metodoPagoNombre]!['subtotal'] as double) + v.total;
       }
+      movimientos.add({
+        'tipo': 'venta', 'id': v.idVenta, 'monto': v.total,
+        'nombre_cliente': v.clienteNombre, 'metodo': v.metodoPagoNombre,
+        'usuario': '', 'sucursal': '', 'observacion': '',
+        'es_fiado': v.esFiado, 'timestamp': v.timestamp,
+      });
     }
 
-    final snapA = await _abonos.orderByChild('fecha').equalTo(hoy).get();
+    final respAbonos = await http.get(Uri.parse('$_baseUrl/api/abonos'));
+    final abonos = respAbonos.statusCode == 200 ? jsonDecode(respAbonos.body) as List : [];
     double totalAbonos = 0;
     int cantAbonos = 0;
-
-    if (snapA.exists) {
-      for (final e in _map(snapA.value).entries) {
-        final d = _map(e.value);
-        if (idSucursal != null && d['id_sucursal'] != idSucursal) continue;
-        final m = (d['monto'] as num?)?.toDouble() ?? 0;
-        totalAbonos += m;
-        cantAbonos++;
-        movimientos.add({
-          'tipo': 'abono', 'id': e.key, 'monto': m,
-          'nombre_cliente': '', 'metodo': 'Abono',
-          'usuario': '', 'sucursal': '',
-          'observacion': d['observacion'] ?? '',
-          'timestamp': (d['timestamp'] as num?)?.toInt() ?? 0,
-        });
-      }
+    for (final a in abonos) {
+      if (a['fecha'] != hoy) continue;
+      totalAbonos += (a['monto'] as num?)?.toDouble() ?? 0;
+      cantAbonos++;
+      movimientos.add({
+        'tipo': 'abono', 'id': a['idAbono'].toString(), 'monto': (a['monto'] as num?)?.toDouble() ?? 0,
+        'nombre_cliente': '', 'metodo': 'Abono', 'usuario': '', 'sucursal': '',
+        'observacion': '', 'timestamp': 0,
+      });
     }
 
-    final snapI = await _inventario.get();
-    final Set<String> bajos = {};
-    if (snapI.exists) {
-      for (final e in _map(snapI.value).entries) {
-        final d   = _map(e.value);
-        final idS = d['id_sucursal'] as String?;
-        if (idSucursal != null && idS != idSucursal) continue;
-        final s    = (d['stock']        as num?)?.toInt() ?? 0;
-        final sMin = (d['stock_minimo'] as num?)?.toInt() ?? 0;
-        if (s <= sMin) bajos.add(d['id_producto'] as String? ?? e.key);
-      }
+    final respInventario = await http.get(Uri.parse('$_baseUrl/api/inventario'));
+    final inventarios = respInventario.statusCode == 200 ? jsonDecode(respInventario.body) as List : [];
+    int stockBajo = 0;
+    for (final inv in inventarios) {
+      if (idSucursal != null && inv['sucursal']['idSucursal'].toString() != idSucursal) continue;
+      final stock = (inv['stock'] as num?)?.toInt() ?? 0;
+      final stockMin = (inv['stockMinimo'] as num?)?.toInt() ?? 0;
+      if (stock <= stockMin) stockBajo++;
     }
 
-    final snapC = await _clientes.get();
-    int cConDeuda = 0; double totalDeuda = 0;
-    if (snapC.exists) {
-      for (final e in _map(snapC.value).entries) {
-        final d = _map(e.value);
-        if (idSucursal != null && d['id_sucursal'] != idSucursal) continue;
-        final saldo = (d['saldo_pendiente'] as num?)?.toDouble() ?? 0;
-        if (saldo > 0) { cConDeuda++; totalDeuda += saldo; }
-      }
+    final clientes = await getClientes();
+    int clientesConDeuda = 0;
+    double totalDeuda = 0;
+    for (final c in clientes) {
+      if (c.saldoPendiente > 0) { clientesConDeuda++; totalDeuda += c.saldoPendiente; }
     }
 
-    movimientos.sort((a,b) => (b['timestamp'] as int).compareTo(a['timestamp'] as int));
+    movimientos.sort((a, b) => (b['timestamp'] as int).compareTo(a['timestamp'] as int));
 
     return {
       'total_ventas':        totalVentasContado,
@@ -699,8 +778,8 @@ class DatabaseService {
       'total_abonos':        totalAbonos,
       'cantidad_abonos':     cantAbonos,
       'total_dia':           totalVentasContado + totalAbonos,
-      'stock_bajo':          bajos.length,
-      'clientes_con_deuda':  cConDeuda,
+      'stock_bajo':          stockBajo,
+      'clientes_con_deuda':  clientesConDeuda,
       'total_deuda':         totalDeuda,
       'movimientos':         movimientos,
     };

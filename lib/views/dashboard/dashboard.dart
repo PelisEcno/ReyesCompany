@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../services/database_service.dart';
+import '../../models/models.dart';
 import '../historial_ventas/modulo_historial_ventas.dart';
 import '../inventario/modulo_inventario.dart';
 import '../resumen_diario/modulo_resumen_diario.dart';
@@ -41,6 +42,7 @@ class DashboardScreen extends StatefulWidget {
 class _DashboardScreenState extends State<DashboardScreen> {
   int _moduloActivo = 0;
   late String? _sucursalSeleccionada;
+  List<Sucursal> _sucursales = [];
 
   // ── Módulos reales (índices fijos, independientes del rol) ────────────────
   // 0 = Inicio
@@ -82,7 +84,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   @override
-  void initState() { super.initState(); _sucursalSeleccionada = widget.usuario.idSucursal; }
+  void initState() {
+    super.initState();
+    _sucursalSeleccionada = widget.usuario.idSucursal;
+    _cargarSucursales();
+  }
+
+  Future<void> _cargarSucursales() async {
+    try {
+      final lista = await DatabaseService().getSucursales();
+      if (mounted) setState(() => _sucursales = lista);
+    } catch (_) {}
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -264,11 +277,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
         child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
           const Text('Seleccionar vista', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: _cText)),
           const SizedBox(height: 16),
-          _opcionSucursal(null,          'Todas las sucursales', Icons.store_mall_directory_rounded),
-          const SizedBox(height: 8),
-          _opcionSucursal('sucursal_1',  'Sucursal Principal',   Icons.store_rounded),
-          const SizedBox(height: 8),
-          _opcionSucursal('sucursal_2',  'Sucursal 2',           Icons.store_rounded),
+          _opcionSucursal(null, 'Todas las sucursales', Icons.store_mall_directory_rounded),
+          for (final s in _sucursales) ...[
+            const SizedBox(height: 8),
+            _opcionSucursal(s.idSucursal, s.nombre, Icons.store_rounded),
+          ],
         ]),
       ),
     );
@@ -314,7 +327,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       case 1: return ModuloVentas(
           key:       ValueKey('ventas_$sucKey'),
           idUsuario: widget.usuario.idUsuario,
-          idSucursal: sucFiltro ?? 'sucursal_1');
+          idSucursal: sucFiltro ?? (_sucursales.isNotEmpty ? _sucursales.first.idSucursal : ''));
       case 2: return ModuloInventario(
           key:          ValueKey('inventario_$sucKey'),
           idSucursal:   sucFiltro,
@@ -356,10 +369,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   String _etiquetaSucursal() {
     if (!widget.usuario.esAdminGlobal) return widget.usuario.sucursalNombre;
-    if (_sucursalSeleccionada == null)          return 'Todas las sucursales';
-    if (_sucursalSeleccionada == 'sucursal_1')  return 'Sucursal Principal';
-    if (_sucursalSeleccionada == 'sucursal_2')  return 'Sucursal 2';
-    return _sucursalSeleccionada!;
+    if (_sucursalSeleccionada == null) return 'Todas las sucursales';
+    final suc = _sucursales.where((s) => s.idSucursal == _sucursalSeleccionada).firstOrNull;
+    return suc?.nombre ?? _sucursalSeleccionada!;
   }
 
   String _fechaHoyLabel() {
