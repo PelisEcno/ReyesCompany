@@ -490,41 +490,114 @@ class DatabaseService {
     }).toList()..sort((a,b) => (b['fecha'] as String).compareTo(a['fecha'] as String));
   }
 
+  // Ya no existe sucursal fija por usuario en tu modelo real, el rol ahora es una tabla aparte
   Future<List<Usuario>> getUsuarios() async {
-    final snapU = await _usuarios.get();
-    if (!snapU.exists) return [];
-    final snapS = await _sucursales.get();
-    final mapS  = snapS.exists ? _map(snapS.value) : <String, dynamic>{};
-    return _map(snapU.value).entries.map((e) {
-      final d    = _map(e.value);
-      final idS  = d['id_sucursal'] as String?;
-      String sNombre = idS != null && mapS.containsKey(idS) ? _map(mapS[idS])['nombre'] ?? '' : '';
-      return Usuario.fromMap(e.key, d, sucursalNombre: sNombre);
-    }).toList()..sort((a,b) => a.nombre.compareTo(b.nombre));
+    final response = await http.get(Uri.parse('$_baseUrl/api/usuarios'));
+    if (response.statusCode != 200) throw Exception('Error al cargar usuarios');
+    final lista = jsonDecode(response.body) as List;
+    return lista.map((d) {
+      final rol = d['rol'];
+      return Usuario(
+        id: d['idUsuario'].toString(),
+        nombre: d['nombre'] ?? '',
+        email: d['email'] ?? '',
+        rol: rol != null ? (rol['nombre'] ?? '') : '',
+        activo: d['activo'] ?? true,
+        idSucursal: null,
+        sucursalNombre: '',
+      );
+    }).toList()
+      ..sort((a, b) => a.nombre.compareTo(b.nombre));
+  }
+
+  Future<int> _obtenerOCrearRol(String nombreRol) async {
+    final respRoles = await http.get(Uri.parse('$_baseUrl/api/roles'));
+    final roles = jsonDecode(respRoles.body) as List;
+    final existente = roles.firstWhere((r) => r['nombre'] == nombreRol, orElse: () => null);
+    if (existente != null) return existente['idRol'] as int;
+
+    final respNuevo = await http.post(
+      Uri.parse('$_baseUrl/api/roles'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'nombre': nombreRol}),
+    );
+    return jsonDecode(respNuevo.body)['idRol'] as int;
   }
 
   Future<void> crearUsuario({
     required String nombre, required String email,
     required String password, required String rol, String? idSucursal,
   }) async {
-    final cred = await _auth.createUserWithEmailAndPassword(email: email, password: password);
-    await _usuarios.child(cred.user!.uid).set({
-      'nombre': nombre, 'email': email, 'rol': rol,
-      'activo': true, 'id_sucursal': idSucursal, 'created_at': ServerValue.timestamp,
-    });
+    final idRol = await _obtenerOCrearRol(rol);
+    await http.post(
+      Uri.parse('$_baseUrl/api/usuarios'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        'nombre': nombre,
+        'email': email,
+        'passwordHash': password,
+        'activo': true,
+        'fechaNacimiento': '2000-01-01T00:00:00',
+        'fechaVencimientoClave': '2099-01-01T00:00:00',
+        'tratamientoDatos': true,
+        'rol': {'idRol': idRol},
+      }),
+    );
   }
 
   Future<void> editarUsuario({
     required String id, required String nombre, required String email,
     required String rol, String? idSucursal,
-  }) => _usuarios.child(id).update({'nombre': nombre, 'email': email, 'rol': rol, 'id_sucursal': idSucursal});
+  }) async {
+    final respActual = await http.get(Uri.parse('$_baseUrl/api/usuarios/$id'));
+    final actual = jsonDecode(respActual.body);
+    final idRol = await _obtenerOCrearRol(rol);
 
-  Future<void> toggleUsuario(String id, bool activo) => _usuarios.child(id).update({'activo': activo});
+    await http.put(
+      Uri.parse('$_baseUrl/api/usuarios/$id'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        'nombre': nombre,
+        'email': email,
+        'activo': actual['activo'],
+        'fechaNacimiento': actual['fechaNacimiento'],
+        'fechaVencimientoClave': actual['fechaVencimientoClave'],
+        'tratamientoDatos': actual['tratamientoDatos'],
+        'rol': {'idRol': idRol},
+      }),
+    );
+  }
+
+  Future<void> toggleUsuario(String id, bool activo) async {
+    final respActual = await http.get(Uri.parse('$_baseUrl/api/usuarios/$id'));
+    final actual = jsonDecode(respActual.body);
+
+    await http.put(
+      Uri.parse('$_baseUrl/api/usuarios/$id'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        'nombre': actual['nombre'],
+        'email': actual['email'],
+        'activo': activo,
+        'fechaNacimiento': actual['fechaNacimiento'],
+        'fechaVencimientoClave': actual['fechaVencimientoClave'],
+        'tratamientoDatos': actual['tratamientoDatos'],
+        'rol': {'idRol': actual['rol']['idRol']},
+      }),
+    );
+  }
 
   Future<void> cambiarPassword(String email, String passwordActual, String passwordNuevo) async {
-    final cred = EmailAuthProvider.credential(email: email, password: passwordActual);
-    await _auth.currentUser!.reauthenticateWithCredential(cred);
-    await _auth.currentUser!.updatePassword(passwordNuevo);
+    final respUsuarios = await http.get(Uri.parse('$_baseUrl/api/usuarios'));
+    final usuarios = jsonDecode(respUsuarios.body) as List;
+    final usuario = usuarios.firstWhere((u) => u['email'] == email, orElse: () => null);
+    if (usuario == null) throw Exception('Usuario no encontrado');
+
+    await http.put(
+      Uri.parse('$_baseUrl/api/usuarios/${usuario['idUsuario']}/password'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'password': passwordNuevo}),
+    );
   }
 
   // Resumen del dia para el dashboard
