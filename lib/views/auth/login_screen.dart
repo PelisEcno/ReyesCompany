@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'database_service.dart';
-import 'dashboard.dart';
+import '../../services/database_service.dart';
+import '../dashboard/dashboard.dart';
 
 // Pantalla para que los usuarios entren al sistema
 class LoginScreen extends StatefulWidget {

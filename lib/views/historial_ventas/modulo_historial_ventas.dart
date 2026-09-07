@@ -3,7 +3,7 @@
 // Acceso: SOLO Administrador
 
 import 'package:flutter/material.dart';
-import 'database_service.dart';
+import '../../services/database_service.dart';
 
 // ── Paleta ───────────────────────────────────────────────────────────────────
 const _cAccent  = Color(0xFF2563EB);

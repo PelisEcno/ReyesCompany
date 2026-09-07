@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'database_service.dart';
-import 'models.dart';
+import '../../services/database_service.dart';
+import '../../models/models.dart';
 
 const kPrimary = Color(0xFF1A5276);
 const kAccent  = Color(0xFF2E86C1);

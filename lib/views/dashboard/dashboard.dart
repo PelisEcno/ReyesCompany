@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
-import 'database_service.dart';
-import 'modulo_historial_ventas.dart';
-import 'modulo_inventario.dart';
-import 'modulo_resumen_diario.dart';
-import 'modulo_ventas.dart';
-import 'modulo_clientes.dart';
-import 'modulo_usuarios.dart';
+import '../../services/database_service.dart';
+import '../historial_ventas/modulo_historial_ventas.dart';
+import '../inventario/modulo_inventario.dart';
+import '../resumen_diario/modulo_resumen_diario.dart';
+import '../ventas/modulo_ventas.dart';
+import '../clientes/modulo_clientes.dart';
+import '../usuarios/modulo_usuarios.dart';
 
 const _cPrimary  = Color(0xFF1A3A5C);
 const _cSidebar  = Color(0xFF162E40);

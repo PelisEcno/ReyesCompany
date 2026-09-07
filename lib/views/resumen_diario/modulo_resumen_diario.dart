@@ -3,8 +3,8 @@
 // Acceso: Administrador y Empleado
 
 import 'package:flutter/material.dart';
-import 'database_service.dart';
-import 'export_service.dart';
+import '../../services/database_service.dart';
+import '../../services/export_service.dart';
 
 // ── Paleta (igual que dashboard) ────────────────────────────────────────────
 const _cAccent  = Color(0xFF2563EB);

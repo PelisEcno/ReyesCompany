@@ -5,10 +5,10 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
-import 'firebase_options.dart';
-import 'login_screen.dart';
-import 'dashboard.dart';
-import 'database_service.dart';
+import 'core/config/firebase_options.dart';
+import 'views/auth/login_screen.dart';
+import 'views/dashboard/dashboard.dart';
+import 'services/database_service.dart';
 // import 'seed_screen.dart'; // Descomentar solo para inicializar
 
 void main() async {
