@@ -1,7 +1,7 @@
 package com.reyescompany.app.controller;
 
-import com.reyescompany.app.model.Sucursal;
-import com.reyescompany.app.service.SucursalService;
+import com.reyescompany.app.model.Venta;
+import com.reyescompany.app.service.VentaService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -16,36 +16,36 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/sucursales")
+@RequestMapping("/api/ventas")
 @CrossOrigin(origins = "*")
-public class SucursalController {
+public class VentaController {
 
     @Autowired
-    private SucursalService sucursalService;
+    private VentaService ventaService;
 
     @GetMapping
-    public List<Sucursal> listar() {
-        return sucursalService.listar();
+    public List<Venta> listar() {
+        return ventaService.listar();
     }
 
     @GetMapping("/{id}")
-    public Sucursal buscarPorId(@PathVariable Integer id) {
-        return sucursalService.buscarPorId(id);
+    public Venta buscarPorId(@PathVariable Integer id) {
+        return ventaService.buscarPorId(id);
     }
 
     @PostMapping
-    public Sucursal crear(@RequestBody Sucursal sucursal) {
-        return sucursalService.guardar(sucursal);
+    public Venta crear(@RequestBody Venta venta) {
+        return ventaService.guardar(venta);
     }
 
     @PutMapping("/{id}")
-    public Sucursal actualizar(@PathVariable Integer id, @RequestBody Sucursal sucursal) {
-        sucursal.setIdSucursal(id);
-        return sucursalService.guardar(sucursal);
+    public Venta actualizar(@PathVariable Integer id, @RequestBody Venta venta) {
+        venta.setIdVenta(id);
+        return ventaService.guardar(venta);
     }
 
     @DeleteMapping("/{id}")
     public void eliminar(@PathVariable Integer id) {
-        sucursalService.eliminar(id);
+        ventaService.eliminar(id);
     }
 }

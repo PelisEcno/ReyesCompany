@@ -13,19 +13,21 @@ public class MetodoPago {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Integer id;
+    @Column(name = "id_metodo_pago")
+    private Integer idMetodoPago;
 
     @Column(nullable = false)
     private String nombre;
 
+    @Column(nullable = false)
     private Boolean activo = true;
 
-    public Integer getId() {
-        return id;
+    public Integer getIdMetodoPago() {
+        return idMetodoPago;
     }
 
-    public void setId(Integer id) {
-        this.id = id;
+    public void setIdMetodoPago(Integer idMetodoPago) {
+        this.idMetodoPago = idMetodoPago;
     }
 
     public String getNombre() {

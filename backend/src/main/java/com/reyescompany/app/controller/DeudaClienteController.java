@@ -1,7 +1,7 @@
 package com.reyescompany.app.controller;
 
-import com.reyescompany.app.model.Sucursal;
-import com.reyescompany.app.service.SucursalService;
+import com.reyescompany.app.model.DeudaCliente;
+import com.reyescompany.app.service.DeudaClienteService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -16,36 +16,36 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/sucursales")
+@RequestMapping("/api/deudas-cliente")
 @CrossOrigin(origins = "*")
-public class SucursalController {
+public class DeudaClienteController {
 
     @Autowired
-    private SucursalService sucursalService;
+    private DeudaClienteService deudaClienteService;
 
     @GetMapping
-    public List<Sucursal> listar() {
-        return sucursalService.listar();
+    public List<DeudaCliente> listar() {
+        return deudaClienteService.listar();
     }
 
     @GetMapping("/{id}")
-    public Sucursal buscarPorId(@PathVariable Integer id) {
-        return sucursalService.buscarPorId(id);
+    public DeudaCliente buscarPorId(@PathVariable Integer id) {
+        return deudaClienteService.buscarPorId(id);
     }
 
     @PostMapping
-    public Sucursal crear(@RequestBody Sucursal sucursal) {
-        return sucursalService.guardar(sucursal);
+    public DeudaCliente crear(@RequestBody DeudaCliente deudaCliente) {
+        return deudaClienteService.guardar(deudaCliente);
     }
 
     @PutMapping("/{id}")
-    public Sucursal actualizar(@PathVariable Integer id, @RequestBody Sucursal sucursal) {
-        sucursal.setIdSucursal(id);
-        return sucursalService.guardar(sucursal);
+    public DeudaCliente actualizar(@PathVariable Integer id, @RequestBody DeudaCliente deudaCliente) {
+        deudaCliente.setIdDeudaCliente(id);
+        return deudaClienteService.guardar(deudaCliente);
     }
 
     @DeleteMapping("/{id}")
     public void eliminar(@PathVariable Integer id) {
-        sucursalService.eliminar(id);
+        deudaClienteService.eliminar(id);
     }
 }

@@ -40,7 +40,7 @@ public class CategoriaController {
 
     @PutMapping("/{id}")
     public Categoria actualizar(@PathVariable Integer id, @RequestBody Categoria categoria) {
-        categoria.setId(id);
+        categoria.setIdCategoria(id);
         return categoriaService.guardar(categoria);
     }
 

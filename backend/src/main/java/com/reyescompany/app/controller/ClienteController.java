@@ -1,7 +1,7 @@
 package com.reyescompany.app.controller;
 
-import com.reyescompany.app.model.Sucursal;
-import com.reyescompany.app.service.SucursalService;
+import com.reyescompany.app.model.Cliente;
+import com.reyescompany.app.service.ClienteService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -16,36 +16,36 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/sucursales")
+@RequestMapping("/api/clientes")
 @CrossOrigin(origins = "*")
-public class SucursalController {
+public class ClienteController {
 
     @Autowired
-    private SucursalService sucursalService;
+    private ClienteService clienteService;
 
     @GetMapping
-    public List<Sucursal> listar() {
-        return sucursalService.listar();
+    public List<Cliente> listar() {
+        return clienteService.listar();
     }
 
     @GetMapping("/{id}")
-    public Sucursal buscarPorId(@PathVariable Integer id) {
-        return sucursalService.buscarPorId(id);
+    public Cliente buscarPorId(@PathVariable Integer id) {
+        return clienteService.buscarPorId(id);
     }
 
     @PostMapping
-    public Sucursal crear(@RequestBody Sucursal sucursal) {
-        return sucursalService.guardar(sucursal);
+    public Cliente crear(@RequestBody Cliente cliente) {
+        return clienteService.guardar(cliente);
     }
 
     @PutMapping("/{id}")
-    public Sucursal actualizar(@PathVariable Integer id, @RequestBody Sucursal sucursal) {
-        sucursal.setIdSucursal(id);
-        return sucursalService.guardar(sucursal);
+    public Cliente actualizar(@PathVariable Integer id, @RequestBody Cliente cliente) {
+        cliente.setIdCliente(id);
+        return clienteService.guardar(cliente);
     }
 
     @DeleteMapping("/{id}")
     public void eliminar(@PathVariable Integer id) {
-        sucursalService.eliminar(id);
+        clienteService.eliminar(id);
     }
 }

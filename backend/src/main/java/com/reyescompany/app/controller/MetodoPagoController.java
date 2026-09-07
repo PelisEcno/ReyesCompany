@@ -40,7 +40,7 @@ public class MetodoPagoController {
 
     @PutMapping("/{id}")
     public MetodoPago actualizar(@PathVariable Integer id, @RequestBody MetodoPago metodoPago) {
-        metodoPago.setId(id);
+        metodoPago.setIdMetodoPago(id);
         return metodoPagoService.guardar(metodoPago);
     }
 

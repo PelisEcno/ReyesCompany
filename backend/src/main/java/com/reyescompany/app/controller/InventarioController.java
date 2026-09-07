@@ -1,7 +1,7 @@
 package com.reyescompany.app.controller;
 
-import com.reyescompany.app.model.Sucursal;
-import com.reyescompany.app.service.SucursalService;
+import com.reyescompany.app.model.Inventario;
+import com.reyescompany.app.service.InventarioService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -16,36 +16,36 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/sucursales")
+@RequestMapping("/api/inventario")
 @CrossOrigin(origins = "*")
-public class SucursalController {
+public class InventarioController {
 
     @Autowired
-    private SucursalService sucursalService;
+    private InventarioService inventarioService;
 
     @GetMapping
-    public List<Sucursal> listar() {
-        return sucursalService.listar();
+    public List<Inventario> listar() {
+        return inventarioService.listar();
     }
 
     @GetMapping("/{id}")
-    public Sucursal buscarPorId(@PathVariable Integer id) {
-        return sucursalService.buscarPorId(id);
+    public Inventario buscarPorId(@PathVariable Integer id) {
+        return inventarioService.buscarPorId(id);
     }
 
     @PostMapping
-    public Sucursal crear(@RequestBody Sucursal sucursal) {
-        return sucursalService.guardar(sucursal);
+    public Inventario crear(@RequestBody Inventario inventario) {
+        return inventarioService.guardar(inventario);
     }
 
     @PutMapping("/{id}")
-    public Sucursal actualizar(@PathVariable Integer id, @RequestBody Sucursal sucursal) {
-        sucursal.setIdSucursal(id);
-        return sucursalService.guardar(sucursal);
+    public Inventario actualizar(@PathVariable Integer id, @RequestBody Inventario inventario) {
+        inventario.setIdInventario(id);
+        return inventarioService.guardar(inventario);
     }
 
     @DeleteMapping("/{id}")
     public void eliminar(@PathVariable Integer id) {
-        sucursalService.eliminar(id);
+        inventarioService.eliminar(id);
     }
 }

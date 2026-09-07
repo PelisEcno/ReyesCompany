@@ -1,7 +1,7 @@
 package com.reyescompany.app.controller;
 
-import com.reyescompany.app.model.Sucursal;
-import com.reyescompany.app.service.SucursalService;
+import com.reyescompany.app.model.RolPermiso;
+import com.reyescompany.app.service.RolPermisoService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -16,36 +16,36 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/sucursales")
+@RequestMapping("/api/roles-permisos")
 @CrossOrigin(origins = "*")
-public class SucursalController {
+public class RolPermisoController {
 
     @Autowired
-    private SucursalService sucursalService;
+    private RolPermisoService rolPermisoService;
 
     @GetMapping
-    public List<Sucursal> listar() {
-        return sucursalService.listar();
+    public List<RolPermiso> listar() {
+        return rolPermisoService.listar();
     }
 
     @GetMapping("/{id}")
-    public Sucursal buscarPorId(@PathVariable Integer id) {
-        return sucursalService.buscarPorId(id);
+    public RolPermiso buscarPorId(@PathVariable Integer id) {
+        return rolPermisoService.buscarPorId(id);
     }
 
     @PostMapping
-    public Sucursal crear(@RequestBody Sucursal sucursal) {
-        return sucursalService.guardar(sucursal);
+    public RolPermiso crear(@RequestBody RolPermiso rolPermiso) {
+        return rolPermisoService.guardar(rolPermiso);
     }
 
     @PutMapping("/{id}")
-    public Sucursal actualizar(@PathVariable Integer id, @RequestBody Sucursal sucursal) {
-        sucursal.setIdSucursal(id);
-        return sucursalService.guardar(sucursal);
+    public RolPermiso actualizar(@PathVariable Integer id, @RequestBody RolPermiso rolPermiso) {
+        rolPermiso.setIdRolPermiso(id);
+        return rolPermisoService.guardar(rolPermiso);
     }
 
     @DeleteMapping("/{id}")
     public void eliminar(@PathVariable Integer id) {
-        sucursalService.eliminar(id);
+        rolPermisoService.eliminar(id);
     }
 }

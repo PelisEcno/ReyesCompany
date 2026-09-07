@@ -1,7 +1,7 @@
 package com.reyescompany.app.controller;
 
-import com.reyescompany.app.model.Sucursal;
-import com.reyescompany.app.service.SucursalService;
+import com.reyescompany.app.model.TipoMovimiento;
+import com.reyescompany.app.service.TipoMovimientoService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -16,36 +16,36 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/sucursales")
+@RequestMapping("/api/tipos-movimiento")
 @CrossOrigin(origins = "*")
-public class SucursalController {
+public class TipoMovimientoController {
 
     @Autowired
-    private SucursalService sucursalService;
+    private TipoMovimientoService tipoMovimientoService;
 
     @GetMapping
-    public List<Sucursal> listar() {
-        return sucursalService.listar();
+    public List<TipoMovimiento> listar() {
+        return tipoMovimientoService.listar();
     }
 
     @GetMapping("/{id}")
-    public Sucursal buscarPorId(@PathVariable Integer id) {
-        return sucursalService.buscarPorId(id);
+    public TipoMovimiento buscarPorId(@PathVariable Integer id) {
+        return tipoMovimientoService.buscarPorId(id);
     }
 
     @PostMapping
-    public Sucursal crear(@RequestBody Sucursal sucursal) {
-        return sucursalService.guardar(sucursal);
+    public TipoMovimiento crear(@RequestBody TipoMovimiento tipoMovimiento) {
+        return tipoMovimientoService.guardar(tipoMovimiento);
     }
 
     @PutMapping("/{id}")
-    public Sucursal actualizar(@PathVariable Integer id, @RequestBody Sucursal sucursal) {
-        sucursal.setIdSucursal(id);
-        return sucursalService.guardar(sucursal);
+    public TipoMovimiento actualizar(@PathVariable Integer id, @RequestBody TipoMovimiento tipoMovimiento) {
+        tipoMovimiento.setIdTipoMovimiento(id);
+        return tipoMovimientoService.guardar(tipoMovimiento);
     }
 
     @DeleteMapping("/{id}")
     public void eliminar(@PathVariable Integer id) {
-        sucursalService.eliminar(id);
+        tipoMovimientoService.eliminar(id);
     }
 }

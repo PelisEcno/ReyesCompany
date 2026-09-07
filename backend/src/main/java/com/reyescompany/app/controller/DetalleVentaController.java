@@ -1,7 +1,7 @@
 package com.reyescompany.app.controller;
 
-import com.reyescompany.app.model.Sucursal;
-import com.reyescompany.app.service.SucursalService;
+import com.reyescompany.app.model.DetalleVenta;
+import com.reyescompany.app.service.DetalleVentaService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -16,36 +16,36 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/sucursales")
+@RequestMapping("/api/detalle-venta")
 @CrossOrigin(origins = "*")
-public class SucursalController {
+public class DetalleVentaController {
 
     @Autowired
-    private SucursalService sucursalService;
+    private DetalleVentaService detalleVentaService;
 
     @GetMapping
-    public List<Sucursal> listar() {
-        return sucursalService.listar();
+    public List<DetalleVenta> listar() {
+        return detalleVentaService.listar();
     }
 
     @GetMapping("/{id}")
-    public Sucursal buscarPorId(@PathVariable Integer id) {
-        return sucursalService.buscarPorId(id);
+    public DetalleVenta buscarPorId(@PathVariable Integer id) {
+        return detalleVentaService.buscarPorId(id);
     }
 
     @PostMapping
-    public Sucursal crear(@RequestBody Sucursal sucursal) {
-        return sucursalService.guardar(sucursal);
+    public DetalleVenta crear(@RequestBody DetalleVenta detalleVenta) {
+        return detalleVentaService.guardar(detalleVenta);
     }
 
     @PutMapping("/{id}")
-    public Sucursal actualizar(@PathVariable Integer id, @RequestBody Sucursal sucursal) {
-        sucursal.setIdSucursal(id);
-        return sucursalService.guardar(sucursal);
+    public DetalleVenta actualizar(@PathVariable Integer id, @RequestBody DetalleVenta detalleVenta) {
+        detalleVenta.setIdDetalleVenta(id);
+        return detalleVentaService.guardar(detalleVenta);
     }
 
     @DeleteMapping("/{id}")
     public void eliminar(@PathVariable Integer id) {
-        sucursalService.eliminar(id);
+        detalleVentaService.eliminar(id);
     }
 }

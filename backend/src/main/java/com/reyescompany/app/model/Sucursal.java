@@ -13,23 +13,27 @@ public class Sucursal {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Integer id;
+    @Column(name = "id_sucursal")
+    private Integer idSucursal;
 
     @Column(nullable = false)
     private String nombre;
 
+    @Column(nullable = false)
     private String direccion;
 
+    @Column(nullable = false)
     private String telefono;
 
-    private Boolean activa = true;
+    @Column(nullable = false)
+    private Boolean estado = true;
 
-    public Integer getId() {
-        return id;
+    public Integer getIdSucursal() {
+        return idSucursal;
     }
 
-    public void setId(Integer id) {
-        this.id = id;
+    public void setIdSucursal(Integer idSucursal) {
+        this.idSucursal = idSucursal;
     }
 
     public String getNombre() {
@@ -56,11 +60,11 @@ public class Sucursal {
         this.telefono = telefono;
     }
 
-    public Boolean getActiva() {
-        return activa;
+    public Boolean getEstado() {
+        return estado;
     }
 
-    public void setActiva(Boolean activa) {
-        this.activa = activa;
+    public void setEstado(Boolean estado) {
+        this.estado = estado;
     }
 }

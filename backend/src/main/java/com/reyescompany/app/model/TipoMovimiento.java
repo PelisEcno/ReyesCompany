@@ -8,23 +8,22 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 
 @Entity
-@Table(name = "categoria")
-public class Categoria {
+@Table(name = "tipo_movimiento")
+public class TipoMovimiento {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "id_categoria")
-    private Integer idCategoria;
+    @Column(name = "id_tipo_movimiento")
+    private Integer idTipoMovimiento;
 
-    @Column(nullable = false)
     private String nombre;
 
-    public Integer getIdCategoria() {
-        return idCategoria;
+    public Integer getIdTipoMovimiento() {
+        return idTipoMovimiento;
     }
 
-    public void setIdCategoria(Integer idCategoria) {
-        this.idCategoria = idCategoria;
+    public void setIdTipoMovimiento(Integer idTipoMovimiento) {
+        this.idTipoMovimiento = idTipoMovimiento;
     }
 
     public String getNombre() {
