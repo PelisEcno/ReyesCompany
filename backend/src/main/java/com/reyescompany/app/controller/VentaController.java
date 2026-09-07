@@ -1,6 +1,7 @@
 package com.reyescompany.app.controller;
 
 import com.reyescompany.app.model.Venta;
+import com.reyescompany.app.model.VentaRequest;
 import com.reyescompany.app.service.VentaService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.CrossOrigin;
@@ -47,5 +48,10 @@ public class VentaController {
     @DeleteMapping("/{id}")
     public void eliminar(@PathVariable Integer id) {
         ventaService.eliminar(id);
+    }
+
+    @PostMapping("/registrar")
+    public Venta registrar(@RequestBody VentaRequest request) {
+        return ventaService.registrarVenta(request);
     }
 }
