@@ -1,3 +1,5 @@
+import 'dart:convert';
+import 'package:http/http.dart' as http;
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
 import '../models/models.dart';
@@ -7,19 +9,18 @@ class DatabaseService {
   factory DatabaseService() => _i;
   DatabaseService._();
 
+  static const String _baseUrl = 'https://reyescompany.onrender.com';
+
   final FirebaseDatabase _db   = FirebaseDatabase.instance;
   final FirebaseAuth     _auth = FirebaseAuth.instance;
 
   // Referencias a la base de datos
   DatabaseReference get _usuarios    => _db.ref('usuarios');
   DatabaseReference get _sucursales  => _db.ref('sucursales');
-  DatabaseReference get _productos   => _db.ref('productos');
   DatabaseReference get _inventario  => _db.ref('inventario');
   DatabaseReference get _ventas      => _db.ref('ventas');
   DatabaseReference get _clientes    => _db.ref('clientes');
   DatabaseReference get _abonos      => _db.ref('abonos');
-  DatabaseReference get _categorias  => _db.ref('categorias');
-  DatabaseReference get _metodosPago => _db.ref('metodos_pago');
 
   String get currentUserId => _auth.currentUser?.uid ?? '';
 
@@ -31,24 +32,32 @@ class DatabaseService {
 
   Map<String, dynamic> _map(dynamic v) => Map<String, dynamic>.from(v as Map);
 
-  // Metodo para loguear usuarios
+  // Metodo para loguear usuarios contra el backend en Render
   Future<Map<String, dynamic>?> login(String email, String password) async {
-    try {
-      final cred = await _auth.signInWithEmailAndPassword(email: email, password: password);
-      final snap = await _usuarios.child(cred.user!.uid).get();
-      if (!snap.exists) return null;
-      final d = _map(snap.value);
-      if (d['activo'] == false) throw Exception('Usuario desactivado');
-      String sucNombre = '';
-      final idSuc = d['id_sucursal'] as String?;
-      if (idSuc != null) {
-        final s = await _sucursales.child(idSuc).get();
-        if (s.exists) sucNombre = _map(s.value)['nombre'] ?? '';
-      }
-      return {'id_usuario': cred.user!.uid, 'nombre': d['nombre'] ?? '', 'rol': d['rol'] ?? 'Empleado',
-        'activo': d['activo'] ?? true, 'id_sucursal': idSuc, 'sucursal_nombre': sucNombre};
-    } on FirebaseAuthException catch (e) {
-      throw Exception(_msgAuth(e.code));
+    final url = Uri.parse('$_baseUrl/api/auth/login');
+    final response = await http.post(
+      url,
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'email': email, 'password': password}),
+    );
+
+    if (response.statusCode == 200) {
+      final d = jsonDecode(response.body);
+      final rol = d['rol'];
+      return {
+        'id_usuario': d['idUsuario'].toString(),
+        'nombre': d['nombre'] ?? '',
+        'rol': rol != null ? (rol['nombre'] ?? '') : '',
+        'activo': d['activo'] ?? true,
+        'id_sucursal': null,
+        'sucursal_nombre': '',
+      };
+    } else if (response.statusCode == 401) {
+      throw Exception('Email o contraseña incorrectos');
+    } else if (response.statusCode == 403) {
+      throw Exception('Usuario desactivado');
+    } else {
+      throw Exception('Error de autenticación');
     }
   }
 
@@ -76,78 +85,100 @@ class DatabaseService {
     };
   }
 
-  String _msgAuth(String c) {
-    switch (c) {
-      case 'user-not-found': case 'wrong-password': case 'invalid-credential': return 'Email o contraseña incorrectos';
-      case 'user-disabled':   return 'Usuario desactivado';
-      case 'too-many-requests': return 'Demasiados intentos. Espera un momento';
-      default: return 'Error de autenticación';
-    }
-  }
-
   Future<List<Sucursal>> getSucursales() async {
-    final snap = await _sucursales.get();
-    if (!snap.exists) return [];
-    return _map(snap.value).entries
-        .where((e) => _map(e.value)['estado'] == true)
-        .map((e) => Sucursal.fromMap(e.key, _map(e.value)))
-        .toList()..sort((a,b) => a.nombre.compareTo(b.nombre));
+    final response = await http.get(Uri.parse('$_baseUrl/api/sucursales'));
+    if (response.statusCode != 200) throw Exception('Error al cargar sucursales');
+    final lista = jsonDecode(response.body) as List;
+    return lista
+        .where((d) => d['estado'] == true)
+        .map((d) => Sucursal(
+              id: d['idSucursal'].toString(),
+              nombre: d['nombre'] ?? '',
+              direccion: d['direccion'] ?? '',
+              telefono: d['telefono'] ?? '',
+              activa: d['estado'] ?? true,
+            ))
+        .toList()
+      ..sort((a, b) => a.nombre.compareTo(b.nombre));
   }
 
   Future<List<Categoria>> getCategorias() async {
-    final snap = await _categorias.get();
-    if (!snap.exists) return [];
-    return _map(snap.value).entries
-        .map((e) => Categoria.fromMap(e.key, _map(e.value)))
-        .toList()..sort((a,b) => a.nombre.compareTo(b.nombre));
+    final response = await http.get(Uri.parse('$_baseUrl/api/categorias'));
+    if (response.statusCode != 200) throw Exception('Error al cargar categorias');
+    final lista = jsonDecode(response.body) as List;
+    return lista
+        .map((d) => Categoria(id: d['idCategoria'].toString(), nombre: d['nombre'] ?? ''))
+        .toList()
+      ..sort((a, b) => a.nombre.compareTo(b.nombre));
   }
 
-  Future<void> crearCategoria(String nombre) =>
-      _categorias.push().set({'nombre': nombre});
+  Future<void> crearCategoria(String nombre) async {
+    await http.post(
+      Uri.parse('$_baseUrl/api/categorias'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'nombre': nombre}),
+    );
+  }
 
   Future<List<MetodoPago>> getMetodosPago() async {
-    final snap = await _metodosPago.get();
-    if (!snap.exists) return [];
-    return _map(snap.value).entries
-        .where((e) => _map(e.value)['activo'] == true)
-        .map((e) => MetodoPago.fromMap(e.key, _map(e.value)))
-        .toList()..sort((a,b) => a.nombre.compareTo(b.nombre));
+    final response = await http.get(Uri.parse('$_baseUrl/api/metodos-pago'));
+    if (response.statusCode != 200) throw Exception('Error al cargar metodos de pago');
+    final lista = jsonDecode(response.body) as List;
+    return lista
+        .where((d) => d['activo'] == true)
+        .map((d) => MetodoPago(id: d['idMetodoPago'].toString(), nombre: d['nombre'] ?? '', activo: d['activo'] ?? true))
+        .toList()
+      ..sort((a, b) => a.nombre.compareTo(b.nombre));
   }
 
   // Traer los productos y filtrar por sucursal si se necesita
   Future<List<Producto>> getProductos({String? idSucursal}) async {
-    final snapP = await _productos.orderByChild('nombre').get();
-    if (!snapP.exists) return [];
-    final mapP = _map(snapP.value);
-
-    final snapI = await _inventario.get();
-    final mapI  = snapI.exists ? _map(snapI.value) : <String, dynamic>{};
+    final respProductos = await http.get(Uri.parse('$_baseUrl/api/productos'));
+    final respInventario = await http.get(Uri.parse('$_baseUrl/api/inventario'));
+    if (respProductos.statusCode != 200 || respInventario.statusCode != 200) {
+      throw Exception('Error al cargar productos');
+    }
+    final productos = jsonDecode(respProductos.body) as List;
+    final inventarios = jsonDecode(respInventario.body) as List;
 
     final lista = <Producto>[];
-    for (final e in mapP.entries) {
-      final data = _map(e.value);
+    for (final p in productos) {
+      final idProducto = p['idProducto'].toString();
       int stock = 0, stockMin = 0;
 
       if (idSucursal != null) {
-        final key = '${e.key}_$idSucursal';
-        if (!mapI.containsKey(key)) continue;
-        final inv = _map(mapI[key]);
-        stock    = (inv['stock']        as num?)?.toInt() ?? 0;
-        stockMin = (inv['stock_minimo'] as num?)?.toInt() ?? 0;
+        final inv = inventarios.firstWhere(
+          (i) => i['producto']['idProducto'].toString() == idProducto &&
+                 i['sucursal']['idSucursal'].toString() == idSucursal,
+          orElse: () => null,
+        );
+        if (inv == null) continue;
+        stock = (inv['stock'] as num?)?.toInt() ?? 0;
+        stockMin = (inv['stockMinimo'] as num?)?.toInt() ?? 0;
       } else {
-        for (final inv in mapI.entries) {
-          if ((inv.key as String).startsWith('${e.key}_')) {
-            final d = _map(inv.value);
-            final s = (d['stock'] as num?)?.toInt() ?? 0;
-            if (s > stock) { stock = s; stockMin = (d['stock_minimo'] as num?)?.toInt() ?? 0; }
+        for (final inv in inventarios) {
+          if (inv['producto']['idProducto'].toString() == idProducto) {
+            stock += (inv['stock'] as num?)?.toInt() ?? 0;
+            stockMin = (inv['stockMinimo'] as num?)?.toInt() ?? stockMin;
           }
         }
       }
 
-      lista.add(Producto.fromMap(e.key, data, stockActual: stock, stockMinimo: stockMin));
+      final cat = p['categoria'];
+      lista.add(Producto(
+        id: idProducto,
+        nombre: p['nombre'] ?? '',
+        descripcion: p['descripcion'] ?? '',
+        idCategoria: cat != null ? cat['idCategoria'].toString() : '',
+        categoriaNombre: cat != null ? (cat['nombre'] ?? '') : '',
+        precioCompra: (p['precioCompra'] as num?)?.toDouble() ?? 0,
+        precioVenta: (p['precioVenta'] as num?)?.toDouble() ?? 0,
+        stockActual: stock,
+        stockMinimo: stockMin,
+      ));
     }
 
-    lista.sort((a,b) => a.nombre.compareTo(b.nombre));
+    lista.sort((a, b) => a.nombre.compareTo(b.nombre));
     return lista;
   }
 
@@ -163,18 +194,30 @@ class DatabaseService {
     required int stockInicial, required int stockMinimo,
     required String idSucursal,
   }) async {
-    final ref = _productos.push();
-    await ref.set({
-      'nombre': nombre, 'descripcion': descripcion,
-      'id_categoria': idCategoria, 'categoria_nombre': categoriaNombre,
-      'precio_compra': precioCompra.toDouble(), 'precio_venta': precioVenta.toDouble(),
-      'created_at': ServerValue.timestamp, 'updated_at': ServerValue.timestamp,
-    });
-    await _inventario.child('${ref.key!}_$idSucursal').set({
-      'id_producto': ref.key!, 'id_sucursal': idSucursal,
-      'stock': stockInicial, 'stock_minimo': stockMinimo,
-      'updated_at': ServerValue.timestamp,
-    });
+    final respProducto = await http.post(
+      Uri.parse('$_baseUrl/api/productos'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        'nombre': nombre,
+        'descripcion': descripcion,
+        'precioCompra': precioCompra,
+        'precioVenta': precioVenta,
+        'categoria': {'idCategoria': int.parse(idCategoria)},
+      }),
+    );
+    if (respProducto.statusCode != 200) throw Exception('No se pudo crear el producto');
+    final producto = jsonDecode(respProducto.body);
+
+    await http.post(
+      Uri.parse('$_baseUrl/api/inventario'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        'stock': stockInicial,
+        'stockMinimo': stockMinimo,
+        'producto': {'idProducto': producto['idProducto']},
+        'sucursal': {'idSucursal': int.parse(idSucursal)},
+      }),
+    );
   }
 
   Future<void> editarProducto({
@@ -184,26 +227,57 @@ class DatabaseService {
     required int stockActual, required int stockMinimo,
     required String idSucursal,
   }) async {
-    await _productos.child(idProducto).update({
-      'nombre': nombre, 'descripcion': descripcion,
-      'id_categoria': idCategoria, 'categoria_nombre': categoriaNombre,
-      'precio_compra': precioCompra.toDouble(), 'precio_venta': precioVenta.toDouble(),
-      'updated_at': ServerValue.timestamp,
+    await http.put(
+      Uri.parse('$_baseUrl/api/productos/$idProducto'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        'nombre': nombre,
+        'descripcion': descripcion,
+        'precioCompra': precioCompra,
+        'precioVenta': precioVenta,
+        'categoria': {'idCategoria': int.parse(idCategoria)},
+      }),
+    );
+
+    final respInventario = await http.get(Uri.parse('$_baseUrl/api/inventario'));
+    final inventarios = jsonDecode(respInventario.body) as List;
+    final existente = inventarios.firstWhere(
+      (i) => i['producto']['idProducto'].toString() == idProducto &&
+             i['sucursal']['idSucursal'].toString() == idSucursal,
+      orElse: () => null,
+    );
+
+    final cuerpo = jsonEncode({
+      'stock': stockActual,
+      'stockMinimo': stockMinimo,
+      'producto': {'idProducto': int.parse(idProducto)},
+      'sucursal': {'idSucursal': int.parse(idSucursal)},
     });
-    await _inventario.child('${idProducto}_$idSucursal').set({
-      'id_producto': idProducto, 'id_sucursal': idSucursal,
-      'stock': stockActual, 'stock_minimo': stockMinimo,
-      'updated_at': ServerValue.timestamp,
-    });
+
+    if (existente != null) {
+      await http.put(
+        Uri.parse('$_baseUrl/api/inventario/${existente['idInventario']}'),
+        headers: {'Content-Type': 'application/json'},
+        body: cuerpo,
+      );
+    } else {
+      await http.post(
+        Uri.parse('$_baseUrl/api/inventario'),
+        headers: {'Content-Type': 'application/json'},
+        body: cuerpo,
+      );
+    }
   }
 
   Future<void> eliminarProducto(String id) async {
-    await _productos.child(id).remove();
-    final snap = await _inventario.get();
-    if (!snap.exists) return;
-    for (final k in _map(snap.value).keys) {
-      if ((k as String).startsWith('${id}_')) await _inventario.child(k).remove();
+    final respInventario = await http.get(Uri.parse('$_baseUrl/api/inventario'));
+    final inventarios = jsonDecode(respInventario.body) as List;
+    for (final inv in inventarios) {
+      if (inv['producto']['idProducto'].toString() == id) {
+        await http.delete(Uri.parse('$_baseUrl/api/inventario/${inv['idInventario']}'));
+      }
     }
+    await http.delete(Uri.parse('$_baseUrl/api/productos/$id'));
   }
 
   // Guardar la venta y bajar el stock
