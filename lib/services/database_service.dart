@@ -133,8 +133,12 @@ class DatabaseService {
 
   // Traer los productos y filtrar por sucursal si se necesita
   Future<List<Producto>> getProductos({String? idSucursal}) async {
-    final respProductos = await http.get(Uri.parse('$_baseUrl/api/productos'));
-    final respInventario = await http.get(Uri.parse('$_baseUrl/api/inventario'));
+    final respuestas = await Future.wait([
+      http.get(Uri.parse('$_baseUrl/api/productos')),
+      http.get(Uri.parse('$_baseUrl/api/inventario')),
+    ]);
+    final respProductos = respuestas[0];
+    final respInventario = respuestas[1];
     if (respProductos.statusCode != 200 || respInventario.statusCode != 200) {
       throw Exception('Error al cargar productos');
     }
@@ -351,9 +355,14 @@ class DatabaseService {
 
   Future<List<Venta>> getHistorialVentas({String? idSucursal, String? fecha}) async {
     final hoy = fecha ?? _hoy();
-    final respVentas = await http.get(Uri.parse('$_baseUrl/api/ventas'));
-    final respPagos = await http.get(Uri.parse('$_baseUrl/api/pagos'));
-    final respDeudas = await http.get(Uri.parse('$_baseUrl/api/deudas-cliente'));
+    final respuestas = await Future.wait([
+      http.get(Uri.parse('$_baseUrl/api/ventas')),
+      http.get(Uri.parse('$_baseUrl/api/pagos')),
+      http.get(Uri.parse('$_baseUrl/api/deudas-cliente')),
+    ]);
+    final respVentas = respuestas[0];
+    final respPagos = respuestas[1];
+    final respDeudas = respuestas[2];
 
     final ventas = jsonDecode(respVentas.body) as List;
     final pagos = respPagos.statusCode == 200 ? jsonDecode(respPagos.body) as List : [];
@@ -428,10 +437,15 @@ class DatabaseService {
   // El cliente ya no tiene sucursal fija ni saldo guardado directo en tu modelo real:
   // el saldo pendiente se calcula sumando las deudas (deuda_cliente) y restando los abonos.
   Future<List<Cliente>> getClientes({String? idSucursal}) async {
-    final respClientes = await http.get(Uri.parse('$_baseUrl/api/clientes'));
+    final respuestas = await Future.wait([
+      http.get(Uri.parse('$_baseUrl/api/clientes')),
+      http.get(Uri.parse('$_baseUrl/api/deudas-cliente')),
+      http.get(Uri.parse('$_baseUrl/api/abonos')),
+    ]);
+    final respClientes = respuestas[0];
+    final respDeudas = respuestas[1];
+    final respAbonos = respuestas[2];
     if (respClientes.statusCode != 200) throw Exception('Error al cargar clientes');
-    final respDeudas = await http.get(Uri.parse('$_baseUrl/api/deudas-cliente'));
-    final respAbonos = await http.get(Uri.parse('$_baseUrl/api/abonos'));
 
     final clientes = jsonDecode(respClientes.body) as List;
     final deudas = respDeudas.statusCode == 200 ? jsonDecode(respDeudas.body) as List : [];
@@ -508,10 +522,12 @@ class DatabaseService {
   }) async {
     if (monto <= 0) throw Exception('El monto debe ser mayor a 0');
 
-    final respDeudas = await http.get(Uri.parse('$_baseUrl/api/deudas-cliente'));
-    final respAbonos = await http.get(Uri.parse('$_baseUrl/api/abonos'));
-    final deudas = jsonDecode(respDeudas.body) as List;
-    final abonos = jsonDecode(respAbonos.body) as List;
+    final respuestas = await Future.wait([
+      http.get(Uri.parse('$_baseUrl/api/deudas-cliente')),
+      http.get(Uri.parse('$_baseUrl/api/abonos')),
+    ]);
+    final deudas = jsonDecode(respuestas[0].body) as List;
+    final abonos = jsonDecode(respuestas[1].body) as List;
 
     final deudasCliente = deudas.where((d) => d['cliente']['idCliente'].toString() == idCliente).toList()
       ..sort((a, b) => (a['fechaDeuda'] as String).compareTo(b['fechaDeuda'] as String));
@@ -570,10 +586,12 @@ class DatabaseService {
   }
 
   Future<List<Map<String, dynamic>>> getHistorialAbonos(String idCliente) async {
-    final respDeudas = await http.get(Uri.parse('$_baseUrl/api/deudas-cliente'));
-    final respAbonos = await http.get(Uri.parse('$_baseUrl/api/abonos'));
-    final deudas = jsonDecode(respDeudas.body) as List;
-    final abonos = jsonDecode(respAbonos.body) as List;
+    final respuestas = await Future.wait([
+      http.get(Uri.parse('$_baseUrl/api/deudas-cliente')),
+      http.get(Uri.parse('$_baseUrl/api/abonos')),
+    ]);
+    final deudas = jsonDecode(respuestas[0].body) as List;
+    final abonos = jsonDecode(respuestas[1].body) as List;
 
     final idsDeuda = deudas
         .where((d) => d['cliente']['idCliente'].toString() == idCliente)
@@ -707,7 +725,17 @@ class DatabaseService {
   // Resumen del dia para el dashboard
   Future<Map<String, dynamic>> getResumenDia({String? idSucursal}) async {
     final hoy = _hoy();
-    final ventasHoy = await getHistorialVentas(idSucursal: idSucursal, fecha: hoy);
+
+    final resultados = await Future.wait<dynamic>([
+      getHistorialVentas(idSucursal: idSucursal, fecha: hoy),
+      http.get(Uri.parse('$_baseUrl/api/abonos')),
+      http.get(Uri.parse('$_baseUrl/api/inventario')),
+      getClientes(),
+    ]);
+    final ventasHoy = resultados[0] as List<Venta>;
+    final respAbonos = resultados[1] as http.Response;
+    final respInventario = resultados[2] as http.Response;
+    final clientes = resultados[3] as List<Cliente>;
 
     double totalVentasContado = 0;
     double totalVentasFiado   = 0;
@@ -735,7 +763,6 @@ class DatabaseService {
       });
     }
 
-    final respAbonos = await http.get(Uri.parse('$_baseUrl/api/abonos'));
     final abonos = respAbonos.statusCode == 200 ? jsonDecode(respAbonos.body) as List : [];
     double totalAbonos = 0;
     int cantAbonos = 0;
@@ -750,7 +777,6 @@ class DatabaseService {
       });
     }
 
-    final respInventario = await http.get(Uri.parse('$_baseUrl/api/inventario'));
     final inventarios = respInventario.statusCode == 200 ? jsonDecode(respInventario.body) as List : [];
     int stockBajo = 0;
     for (final inv in inventarios) {
@@ -760,7 +786,6 @@ class DatabaseService {
       if (stock <= stockMin) stockBajo++;
     }
 
-    final clientes = await getClientes();
     int clientesConDeuda = 0;
     double totalDeuda = 0;
     for (final c in clientes) {
