@@ -14,7 +14,7 @@ public class AbonoService {
     private AbonoRepository abonoRepository;
 
     public List<Abono> listar() {
-        return abonoRepository.findAll();
+        return abonoRepository.listarConDatos();
     }
 
     public Abono buscarPorId(Integer id) {

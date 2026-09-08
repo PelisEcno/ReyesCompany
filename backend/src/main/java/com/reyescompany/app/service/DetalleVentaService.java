@@ -14,7 +14,7 @@ public class DetalleVentaService {
     private DetalleVentaRepository detalleVentaRepository;
 
     public List<DetalleVenta> listar() {
-        return detalleVentaRepository.findAll();
+        return detalleVentaRepository.listarConDatos();
     }
 
     public DetalleVenta buscarPorId(Integer id) {

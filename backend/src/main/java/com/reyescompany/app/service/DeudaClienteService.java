@@ -15,7 +15,7 @@ public class DeudaClienteService {
     private DeudaClienteRepository deudaClienteRepository;
 
     public List<DeudaCliente> listar() {
-        return deudaClienteRepository.findAll();
+        return deudaClienteRepository.listarConDatos();
     }
 
     public DeudaCliente buscarPorId(Integer id) {

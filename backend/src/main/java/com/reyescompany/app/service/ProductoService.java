@@ -15,7 +15,7 @@ public class ProductoService {
     private ProductoRepository productoRepository;
 
     public List<Producto> listar() {
-        return productoRepository.findAll();
+        return productoRepository.listarConDatos();
     }
 
     public Producto buscarPorId(Integer id) {

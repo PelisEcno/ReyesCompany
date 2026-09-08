@@ -60,7 +60,7 @@ public class VentaService {
     private MetodoPagoRepository metodoPagoRepository;
 
     public List<Venta> listar() {
-        return ventaRepository.findAll();
+        return ventaRepository.listarConDatos();
     }
 
     public Venta buscarPorId(Integer id) {

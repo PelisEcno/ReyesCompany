@@ -15,7 +15,7 @@ public class InventarioService {
     private InventarioRepository inventarioRepository;
 
     public List<Inventario> listar() {
-        return inventarioRepository.findAll();
+        return inventarioRepository.listarConDatos();
     }
 
     public Inventario buscarPorId(Integer id) {

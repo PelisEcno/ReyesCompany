@@ -14,7 +14,7 @@ public class PagoService {
     private PagoRepository pagoRepository;
 
     public List<Pago> listar() {
-        return pagoRepository.findAll();
+        return pagoRepository.listarConDatos();
     }
 
     public Pago buscarPorId(Integer id) {
