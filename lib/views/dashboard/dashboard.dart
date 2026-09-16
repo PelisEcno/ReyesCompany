@@ -699,7 +699,8 @@ class _ModuloInicioState extends State<ModuloInicio> {
         final monto    = (m['monto']  as num?)?.toDouble() ?? 0;
         final color    = esVenta ? _cAccent : _cGreen;
         final icono    = esVenta ? Icons.point_of_sale_rounded : Icons.payments_rounded;
-        final titulo   = esVenta ? 'Venta #${(m["id"] as String?)?.substring(0, 6) ?? ""}' : 'Abono';
+        final idMov    = (m["id"] as String?) ?? '';
+        final titulo   = esVenta ? 'Venta #${idMov.substring(0, idMov.length.clamp(0, 6))}' : 'Abono';
         final metodo   = m['metodo']?.toString()          ?? '';
         final cliente  = m['nombre_cliente']?.toString()  ?? '';
         final usuario  = m['usuario']?.toString()         ?? '';

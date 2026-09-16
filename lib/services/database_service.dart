@@ -11,6 +11,8 @@ class DatabaseService {
 
   static const String _baseUrl = 'https://reyescompany.onrender.com';
 
+  final http.Client _client = http.Client();
+
   final FirebaseDatabase _db   = FirebaseDatabase.instance;
   final FirebaseAuth     _auth = FirebaseAuth.instance;
 
@@ -35,7 +37,7 @@ class DatabaseService {
   // Metodo para loguear usuarios contra el backend en Render
   Future<Map<String, dynamic>?> login(String email, String password) async {
     final url = Uri.parse('$_baseUrl/api/auth/login');
-    final response = await http.post(
+    final response = await _client.post(
       url,
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode({'email': email, 'password': password}),
@@ -86,7 +88,7 @@ class DatabaseService {
   }
 
   Future<List<Sucursal>> getSucursales() async {
-    final response = await http.get(Uri.parse('$_baseUrl/api/sucursales'));
+    final response = await _client.get(Uri.parse('$_baseUrl/api/sucursales'));
     if (response.statusCode != 200) throw Exception('Error al cargar sucursales');
     final lista = jsonDecode(response.body) as List;
     return lista
@@ -103,7 +105,7 @@ class DatabaseService {
   }
 
   Future<List<Categoria>> getCategorias() async {
-    final response = await http.get(Uri.parse('$_baseUrl/api/categorias'));
+    final response = await _client.get(Uri.parse('$_baseUrl/api/categorias'));
     if (response.statusCode != 200) throw Exception('Error al cargar categorias');
     final lista = jsonDecode(response.body) as List;
     return lista
@@ -113,7 +115,7 @@ class DatabaseService {
   }
 
   Future<void> crearCategoria(String nombre) async {
-    await http.post(
+    await _client.post(
       Uri.parse('$_baseUrl/api/categorias'),
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode({'nombre': nombre}),
@@ -121,7 +123,7 @@ class DatabaseService {
   }
 
   Future<List<MetodoPago>> getMetodosPago() async {
-    final response = await http.get(Uri.parse('$_baseUrl/api/metodos-pago'));
+    final response = await _client.get(Uri.parse('$_baseUrl/api/metodos-pago'));
     if (response.statusCode != 200) throw Exception('Error al cargar metodos de pago');
     final lista = jsonDecode(response.body) as List;
     return lista
@@ -134,8 +136,8 @@ class DatabaseService {
   // Traer los productos y filtrar por sucursal si se necesita
   Future<List<Producto>> getProductos({String? idSucursal}) async {
     final respuestas = await Future.wait([
-      http.get(Uri.parse('$_baseUrl/api/productos')),
-      http.get(Uri.parse('$_baseUrl/api/inventario')),
+      _client.get(Uri.parse('$_baseUrl/api/productos')),
+      _client.get(Uri.parse('$_baseUrl/api/inventario')),
     ]);
     final respProductos = respuestas[0];
     final respInventario = respuestas[1];
@@ -198,7 +200,7 @@ class DatabaseService {
     required int stockInicial, required int stockMinimo,
     required String idSucursal,
   }) async {
-    final respProducto = await http.post(
+    final respProducto = await _client.post(
       Uri.parse('$_baseUrl/api/productos'),
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode({
@@ -212,7 +214,7 @@ class DatabaseService {
     if (respProducto.statusCode != 200) throw Exception('No se pudo crear el producto');
     final producto = jsonDecode(respProducto.body);
 
-    await http.post(
+    await _client.post(
       Uri.parse('$_baseUrl/api/inventario'),
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode({
@@ -231,7 +233,7 @@ class DatabaseService {
     required int stockActual, required int stockMinimo,
     required String idSucursal,
   }) async {
-    await http.put(
+    await _client.put(
       Uri.parse('$_baseUrl/api/productos/$idProducto'),
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode({
@@ -243,7 +245,7 @@ class DatabaseService {
       }),
     );
 
-    final respInventario = await http.get(Uri.parse('$_baseUrl/api/inventario'));
+    final respInventario = await _client.get(Uri.parse('$_baseUrl/api/inventario'));
     final inventarios = jsonDecode(respInventario.body) as List;
     final existente = inventarios.firstWhere(
       (i) => i['producto']['idProducto'].toString() == idProducto &&
@@ -259,13 +261,13 @@ class DatabaseService {
     });
 
     if (existente != null) {
-      await http.put(
+      await _client.put(
         Uri.parse('$_baseUrl/api/inventario/${existente['idInventario']}'),
         headers: {'Content-Type': 'application/json'},
         body: cuerpo,
       );
     } else {
-      await http.post(
+      await _client.post(
         Uri.parse('$_baseUrl/api/inventario'),
         headers: {'Content-Type': 'application/json'},
         body: cuerpo,
@@ -274,26 +276,26 @@ class DatabaseService {
   }
 
   Future<void> eliminarProducto(String id) async {
-    final respInventario = await http.get(Uri.parse('$_baseUrl/api/inventario'));
+    final respInventario = await _client.get(Uri.parse('$_baseUrl/api/inventario'));
     final inventarios = jsonDecode(respInventario.body) as List;
     for (final inv in inventarios) {
       if (inv['producto']['idProducto'].toString() == id) {
-        await http.delete(Uri.parse('$_baseUrl/api/inventario/${inv['idInventario']}'));
+        await _client.delete(Uri.parse('$_baseUrl/api/inventario/${inv['idInventario']}'));
       }
     }
-    await http.delete(Uri.parse('$_baseUrl/api/productos/$id'));
+    await _client.delete(Uri.parse('$_baseUrl/api/productos/$id'));
   }
 
   // Guardar la venta y bajar el stock
   // Tu modelo real exige un cliente en toda venta, incluso de contado.
   // Si no se elige uno, usamos/creamos un cliente generico "Consumidor Final".
   Future<String> _obtenerOCrearClienteGenerico() async {
-    final respClientes = await http.get(Uri.parse('$_baseUrl/api/clientes'));
+    final respClientes = await _client.get(Uri.parse('$_baseUrl/api/clientes'));
     final clientes = jsonDecode(respClientes.body) as List;
     final existente = clientes.firstWhere((c) => c['nombre'] == 'Consumidor Final', orElse: () => null);
     if (existente != null) return existente['idCliente'].toString();
 
-    final respNuevo = await http.post(
+    final respNuevo = await _client.post(
       Uri.parse('$_baseUrl/api/clientes'),
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode({'nombre': 'Consumidor Final', 'apellido': '', 'telefono': '', 'direccion': ''}),
@@ -312,7 +314,7 @@ class DatabaseService {
     final esFiado = tipoVenta == 'Fiado';
     final clienteFinal = idCliente ?? await _obtenerOCrearClienteGenerico();
 
-    final respInventario = await http.get(Uri.parse('$_baseUrl/api/inventario'));
+    final respInventario = await _client.get(Uri.parse('$_baseUrl/api/inventario'));
     final inventarios = jsonDecode(respInventario.body) as List;
 
     final itemsRequest = <Map<String, dynamic>>[];
@@ -335,7 +337,7 @@ class DatabaseService {
       });
     }
 
-    final response = await http.post(
+    final response = await _client.post(
       Uri.parse('$_baseUrl/api/ventas/registrar'),
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode({
@@ -356,9 +358,9 @@ class DatabaseService {
   Future<List<Venta>> getHistorialVentas({String? idSucursal, String? fecha}) async {
     final hoy = fecha ?? _hoy();
     final respuestas = await Future.wait([
-      http.get(Uri.parse('$_baseUrl/api/ventas')),
-      http.get(Uri.parse('$_baseUrl/api/pagos')),
-      http.get(Uri.parse('$_baseUrl/api/deudas-cliente')),
+      _client.get(Uri.parse('$_baseUrl/api/ventas')),
+      _client.get(Uri.parse('$_baseUrl/api/pagos')),
+      _client.get(Uri.parse('$_baseUrl/api/deudas-cliente')),
     ]);
     final respVentas = respuestas[0];
     final respPagos = respuestas[1];
@@ -400,7 +402,7 @@ class DatabaseService {
   // No existe columna "anulada" en tu modelo real: anular significa
   // deshacer de verdad el detalle, el pago o la deuda, y devolver el stock.
   Future<void> anularVenta(String idVenta) async {
-    final respDetalles = await http.get(Uri.parse('$_baseUrl/api/detalle-venta'));
+    final respDetalles = await _client.get(Uri.parse('$_baseUrl/api/detalle-venta'));
     final detalles = jsonDecode(respDetalles.body) as List;
     final propios = detalles.where((d) => d['venta']['idVenta'].toString() == idVenta).toList();
 
@@ -408,7 +410,7 @@ class DatabaseService {
       final inv = d['inventario'];
       final stockActual = (inv['stock'] as num).toInt();
       final cantidad = (d['cantidad'] as num).toInt();
-      await http.put(
+      await _client.put(
         Uri.parse('$_baseUrl/api/inventario/${inv['idInventario']}'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
@@ -418,29 +420,29 @@ class DatabaseService {
           'sucursal': {'idSucursal': inv['sucursal']['idSucursal']},
         }),
       );
-      await http.delete(Uri.parse('$_baseUrl/api/detalle-venta/${d['idDetalleVenta']}'));
+      await _client.delete(Uri.parse('$_baseUrl/api/detalle-venta/${d['idDetalleVenta']}'));
     }
 
-    final respPagos = await http.get(Uri.parse('$_baseUrl/api/pagos'));
+    final respPagos = await _client.get(Uri.parse('$_baseUrl/api/pagos'));
     final pagos = jsonDecode(respPagos.body) as List;
     final pago = pagos.firstWhere((p) => p['venta']['idVenta'].toString() == idVenta, orElse: () => null);
-    if (pago != null) await http.delete(Uri.parse('$_baseUrl/api/pagos/${pago['idPago']}'));
+    if (pago != null) await _client.delete(Uri.parse('$_baseUrl/api/pagos/${pago['idPago']}'));
 
-    final respDeudas = await http.get(Uri.parse('$_baseUrl/api/deudas-cliente'));
+    final respDeudas = await _client.get(Uri.parse('$_baseUrl/api/deudas-cliente'));
     final deudas = jsonDecode(respDeudas.body) as List;
     final deuda = deudas.firstWhere((d) => d['venta']['idVenta'].toString() == idVenta, orElse: () => null);
-    if (deuda != null) await http.delete(Uri.parse('$_baseUrl/api/deudas-cliente/${deuda['idDeudaCliente']}'));
+    if (deuda != null) await _client.delete(Uri.parse('$_baseUrl/api/deudas-cliente/${deuda['idDeudaCliente']}'));
 
-    await http.delete(Uri.parse('$_baseUrl/api/ventas/$idVenta'));
+    await _client.delete(Uri.parse('$_baseUrl/api/ventas/$idVenta'));
   }
 
   // El cliente ya no tiene sucursal fija ni saldo guardado directo en tu modelo real:
   // el saldo pendiente se calcula sumando las deudas (deuda_cliente) y restando los abonos.
   Future<List<Cliente>> getClientes({String? idSucursal}) async {
     final respuestas = await Future.wait([
-      http.get(Uri.parse('$_baseUrl/api/clientes')),
-      http.get(Uri.parse('$_baseUrl/api/deudas-cliente')),
-      http.get(Uri.parse('$_baseUrl/api/abonos')),
+      _client.get(Uri.parse('$_baseUrl/api/clientes')),
+      _client.get(Uri.parse('$_baseUrl/api/deudas-cliente')),
+      _client.get(Uri.parse('$_baseUrl/api/abonos')),
     ]);
     final respClientes = respuestas[0];
     final respDeudas = respuestas[1];
@@ -486,7 +488,7 @@ class DatabaseService {
     required String nombre, required String idSucursal,
     String telefono = '', String direccion = '',
   }) async {
-    await http.post(
+    await _client.post(
       Uri.parse('$_baseUrl/api/clientes'),
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode({'nombre': nombre, 'apellido': '', 'telefono': telefono, 'direccion': direccion}),
@@ -497,7 +499,7 @@ class DatabaseService {
     required String id, required String nombre,
     String telefono = '', String direccion = '',
   }) async {
-    await http.put(
+    await _client.put(
       Uri.parse('$_baseUrl/api/clientes/$id'),
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode({'nombre': nombre, 'apellido': '', 'telefono': telefono, 'direccion': direccion}),
@@ -510,7 +512,7 @@ class DatabaseService {
     if (cliente.saldoPendiente > 0) {
       throw Exception('No se puede eliminar un cliente con saldo pendiente (\$${cliente.saldoPendiente.toStringAsFixed(0)})');
     }
-    await http.delete(Uri.parse('$_baseUrl/api/clientes/$id'));
+    await _client.delete(Uri.parse('$_baseUrl/api/clientes/$id'));
   }
 
   // Tu modelo real no guarda un saldo fijo: cada abono se aplica contra
@@ -523,8 +525,8 @@ class DatabaseService {
     if (monto <= 0) throw Exception('El monto debe ser mayor a 0');
 
     final respuestas = await Future.wait([
-      http.get(Uri.parse('$_baseUrl/api/deudas-cliente')),
-      http.get(Uri.parse('$_baseUrl/api/abonos')),
+      _client.get(Uri.parse('$_baseUrl/api/deudas-cliente')),
+      _client.get(Uri.parse('$_baseUrl/api/abonos')),
     ]);
     final deudas = jsonDecode(respuestas[0].body) as List;
     final abonos = jsonDecode(respuestas[1].body) as List;
@@ -556,7 +558,7 @@ class DatabaseService {
       if (restante <= 0) break;
       final pendiente = p['pendiente'] as double;
       final aplicar = restante < pendiente ? restante : pendiente;
-      await http.post(
+      await _client.post(
         Uri.parse('$_baseUrl/api/abonos'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
@@ -570,7 +572,7 @@ class DatabaseService {
   }
 
   Future<List<Map<String, dynamic>>> getHistorialFiados(String idCliente) async {
-    final respDeudas = await http.get(Uri.parse('$_baseUrl/api/deudas-cliente'));
+    final respDeudas = await _client.get(Uri.parse('$_baseUrl/api/deudas-cliente'));
     final deudas = jsonDecode(respDeudas.body) as List;
     final propias = deudas.where((d) => d['cliente']['idCliente'].toString() == idCliente).toList();
 
@@ -587,8 +589,8 @@ class DatabaseService {
 
   Future<List<Map<String, dynamic>>> getHistorialAbonos(String idCliente) async {
     final respuestas = await Future.wait([
-      http.get(Uri.parse('$_baseUrl/api/deudas-cliente')),
-      http.get(Uri.parse('$_baseUrl/api/abonos')),
+      _client.get(Uri.parse('$_baseUrl/api/deudas-cliente')),
+      _client.get(Uri.parse('$_baseUrl/api/abonos')),
     ]);
     final deudas = jsonDecode(respuestas[0].body) as List;
     final abonos = jsonDecode(respuestas[1].body) as List;
@@ -614,7 +616,7 @@ class DatabaseService {
 
   // Ya no existe sucursal fija por usuario en tu modelo real, el rol ahora es una tabla aparte
   Future<List<Usuario>> getUsuarios() async {
-    final response = await http.get(Uri.parse('$_baseUrl/api/usuarios'));
+    final response = await _client.get(Uri.parse('$_baseUrl/api/usuarios'));
     if (response.statusCode != 200) throw Exception('Error al cargar usuarios');
     final lista = jsonDecode(response.body) as List;
     return lista.map((d) {
@@ -633,12 +635,12 @@ class DatabaseService {
   }
 
   Future<int> _obtenerOCrearRol(String nombreRol) async {
-    final respRoles = await http.get(Uri.parse('$_baseUrl/api/roles'));
+    final respRoles = await _client.get(Uri.parse('$_baseUrl/api/roles'));
     final roles = jsonDecode(respRoles.body) as List;
     final existente = roles.firstWhere((r) => r['nombre'] == nombreRol, orElse: () => null);
     if (existente != null) return existente['idRol'] as int;
 
-    final respNuevo = await http.post(
+    final respNuevo = await _client.post(
       Uri.parse('$_baseUrl/api/roles'),
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode({'nombre': nombreRol}),
@@ -651,7 +653,7 @@ class DatabaseService {
     required String password, required String rol, String? idSucursal,
   }) async {
     final idRol = await _obtenerOCrearRol(rol);
-    await http.post(
+    await _client.post(
       Uri.parse('$_baseUrl/api/usuarios'),
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode({
@@ -671,11 +673,11 @@ class DatabaseService {
     required String id, required String nombre, required String email,
     required String rol, String? idSucursal,
   }) async {
-    final respActual = await http.get(Uri.parse('$_baseUrl/api/usuarios/$id'));
+    final respActual = await _client.get(Uri.parse('$_baseUrl/api/usuarios/$id'));
     final actual = jsonDecode(respActual.body);
     final idRol = await _obtenerOCrearRol(rol);
 
-    await http.put(
+    await _client.put(
       Uri.parse('$_baseUrl/api/usuarios/$id'),
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode({
@@ -691,10 +693,10 @@ class DatabaseService {
   }
 
   Future<void> toggleUsuario(String id, bool activo) async {
-    final respActual = await http.get(Uri.parse('$_baseUrl/api/usuarios/$id'));
+    final respActual = await _client.get(Uri.parse('$_baseUrl/api/usuarios/$id'));
     final actual = jsonDecode(respActual.body);
 
-    await http.put(
+    await _client.put(
       Uri.parse('$_baseUrl/api/usuarios/$id'),
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode({
@@ -710,12 +712,12 @@ class DatabaseService {
   }
 
   Future<void> cambiarPassword(String email, String passwordActual, String passwordNuevo) async {
-    final respUsuarios = await http.get(Uri.parse('$_baseUrl/api/usuarios'));
+    final respUsuarios = await _client.get(Uri.parse('$_baseUrl/api/usuarios'));
     final usuarios = jsonDecode(respUsuarios.body) as List;
     final usuario = usuarios.firstWhere((u) => u['email'] == email, orElse: () => null);
     if (usuario == null) throw Exception('Usuario no encontrado');
 
-    await http.put(
+    await _client.put(
       Uri.parse('$_baseUrl/api/usuarios/${usuario['idUsuario']}/password'),
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode({'password': passwordNuevo}),
@@ -728,8 +730,8 @@ class DatabaseService {
 
     final resultados = await Future.wait<dynamic>([
       getHistorialVentas(idSucursal: idSucursal, fecha: hoy),
-      http.get(Uri.parse('$_baseUrl/api/abonos')),
-      http.get(Uri.parse('$_baseUrl/api/inventario')),
+      _client.get(Uri.parse('$_baseUrl/api/abonos')),
+      _client.get(Uri.parse('$_baseUrl/api/inventario')),
       getClientes(),
     ]);
     final ventasHoy = resultados[0] as List<Venta>;
