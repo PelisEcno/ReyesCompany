@@ -7,7 +7,7 @@ class DatabaseService {
   factory DatabaseService() => _i;
   DatabaseService._();
 
-  static const String _baseUrl = 'https://reyescompany.onrender.com';
+  static const String _baseUrl = 'https://168-138-90-21.nip.io';
 
   final http.Client _client = http.Client();
 
