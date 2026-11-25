@@ -9,7 +9,7 @@ INSERT INTO categoria (id_categoria, nombre) VALUES
 
 INSERT INTO metodo_pago (id_metodo_pago, activo, nombre) VALUES
 (100, 1, 'Efectivo'),
-(101, 1, 'Tarjeta'),
+(101, 1, 'Daviplata'),
 (102, 1, 'Nequi');
 
 INSERT INTO rol (id_rol, nombre) VALUES
@@ -78,9 +78,9 @@ INSERT INTO abono (id_abono, monto, fecha, id_deuda_cliente) VALUES
 
 INSERT INTO tipo_movimiento (id_tipo_movimiento, nombre) VALUES
 (100, 'Entrada'),
-(101, 'Salida'),
+(101, 'Merma'),
 (102, 'Venta'),
-(103, 'Ajuste');
+(103, 'Anulacion');
 
 INSERT INTO movimiento_inventario (id_movimiento_inventario, cantidad, fecha, id_tipo_movimiento, id_inventario, id_venta) VALUES
 (100, 2, NOW(), 102, 100, 100),

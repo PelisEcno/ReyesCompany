@@ -14,4 +14,6 @@ public interface DetalleVentaRepository extends JpaRepository<DetalleVenta, Inte
            "JOIN FETCH i.sucursal " +
            "JOIN FETCH dv.venta")
     List<DetalleVenta> listarConDatos();
+
+    List<DetalleVenta> findByVentaIdVenta(Integer idVenta);
 }

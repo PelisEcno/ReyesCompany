@@ -13,4 +13,6 @@ public interface AbonoRepository extends JpaRepository<Abono, Integer> {
            "JOIN FETCH d.cliente " +
            "JOIN FETCH d.venta")
     List<Abono> listarConDatos();
+
+    List<Abono> findByDeudaClienteIdDeudaCliente(Integer idDeudaCliente);
 }

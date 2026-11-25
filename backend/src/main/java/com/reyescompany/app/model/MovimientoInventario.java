@@ -26,6 +26,9 @@ public class MovimientoInventario {
     @Column(nullable = false)
     private LocalDateTime fecha;
 
+    @Column(length = 255)
+    private String observacion;
+
     @ManyToOne
     @JoinColumn(name = "id_tipo_movimiento", nullable = false)
     private TipoMovimiento tipoMovimiento;
@@ -35,8 +38,12 @@ public class MovimientoInventario {
     private Inventario inventario;
 
     @ManyToOne
-    @JoinColumn(name = "id_venta", nullable = false)
+    @JoinColumn(name = "id_venta")
     private Venta venta;
+
+    @ManyToOne
+    @JoinColumn(name = "id_usuario")
+    private Usuario usuario;
 
     public Integer getIdMovimientoInventario() {
         return idMovimientoInventario;
@@ -62,6 +69,14 @@ public class MovimientoInventario {
         this.fecha = fecha;
     }
 
+    public String getObservacion() {
+        return observacion;
+    }
+
+    public void setObservacion(String observacion) {
+        this.observacion = observacion;
+    }
+
     public TipoMovimiento getTipoMovimiento() {
         return tipoMovimiento;
     }
@@ -84,5 +99,13 @@ public class MovimientoInventario {
 
     public void setVenta(Venta venta) {
         this.venta = venta;
+    }
+
+    public Usuario getUsuario() {
+        return usuario;
+    }
+
+    public void setUsuario(Usuario usuario) {
+        this.usuario = usuario;
     }
 }

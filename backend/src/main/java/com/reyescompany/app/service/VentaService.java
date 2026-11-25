@@ -11,6 +11,7 @@ import com.reyescompany.app.model.Sucursal;
 import com.reyescompany.app.model.Usuario;
 import com.reyescompany.app.model.Venta;
 import com.reyescompany.app.model.VentaRequest;
+import com.reyescompany.app.repository.AbonoRepository;
 import com.reyescompany.app.repository.ClienteRepository;
 import com.reyescompany.app.repository.DeudaClienteRepository;
 import com.reyescompany.app.repository.DetalleVentaRepository;
@@ -58,6 +59,12 @@ public class VentaService {
 
     @Autowired
     private MetodoPagoRepository metodoPagoRepository;
+
+    @Autowired
+    private AbonoRepository abonoRepository;
+
+    @Autowired
+    private MovimientoInventarioService movimientoInventarioService;
 
     public List<Venta> listar() {
         return ventaRepository.listarConDatos();
@@ -123,6 +130,8 @@ public class VentaService {
             detalle.setCantidad(item.getCantidad());
             detalle.setPrecioUnitario(item.getPrecioUnitario());
             detalleVentaRepository.save(detalle);
+
+            movimientoInventarioService.guardarMovimiento("Venta", inventario, item.getCantidad(), venta, usuario, null);
         }
 
         if (Boolean.TRUE.equals(request.getEsFiado())) {
@@ -143,5 +152,33 @@ public class VentaService {
         }
 
         return venta;
+    }
+
+    @Transactional
+    public void anularVenta(Integer idVenta) {
+        Venta venta = ventaRepository.findById(idVenta).orElseThrow();
+
+        List<DetalleVenta> detalles = detalleVentaRepository.findByVentaIdVenta(idVenta);
+        for (DetalleVenta detalle : detalles) {
+            Inventario inventario = detalle.getInventario();
+            inventario.setStock(inventario.getStock() + detalle.getCantidad());
+            inventario.setUpdatedAt(LocalDateTime.now());
+            inventarioRepository.save(inventario);
+
+            movimientoInventarioService.guardarMovimiento("Anulacion", inventario, detalle.getCantidad(), null, null,
+                    "Anulación de la venta #" + idVenta);
+        }
+
+        movimientoInventarioService.eliminarPorVenta(idVenta);
+        detalleVentaRepository.deleteAll(detalles);
+        pagoRepository.deleteAll(pagoRepository.findByVentaIdVenta(idVenta));
+
+        List<DeudaCliente> deudas = deudaClienteRepository.findByVentaIdVenta(idVenta);
+        for (DeudaCliente deuda : deudas) {
+            abonoRepository.deleteAll(abonoRepository.findByDeudaClienteIdDeudaCliente(deuda.getIdDeudaCliente()));
+        }
+        deudaClienteRepository.deleteAll(deudas);
+
+        ventaRepository.delete(venta);
     }
 }

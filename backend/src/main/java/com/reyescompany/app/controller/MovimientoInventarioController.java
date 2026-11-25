@@ -1,6 +1,7 @@
 package com.reyescompany.app.controller;
 
 import com.reyescompany.app.model.MovimientoInventario;
+import com.reyescompany.app.model.MovimientoRequest;
 import com.reyescompany.app.service.MovimientoInventarioService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.CrossOrigin;
@@ -31,6 +32,11 @@ public class MovimientoInventarioController {
     @GetMapping("/{id}")
     public MovimientoInventario buscarPorId(@PathVariable Integer id) {
         return movimientoInventarioService.buscarPorId(id);
+    }
+
+    @PostMapping("/registrar")
+    public MovimientoInventario registrar(@RequestBody MovimientoRequest request) {
+        return movimientoInventarioService.registrarMovimiento(request);
     }
 
     @PostMapping

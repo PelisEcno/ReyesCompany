@@ -12,4 +12,6 @@ public interface PagoRepository extends JpaRepository<Pago, Integer> {
            "JOIN FETCH p.metodoPago " +
            "JOIN FETCH p.venta")
     List<Pago> listarConDatos();
+
+    List<Pago> findByVentaIdVenta(Integer idVenta);
 }

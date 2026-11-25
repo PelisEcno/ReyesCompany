@@ -54,4 +54,9 @@ public class VentaController {
     public Venta registrar(@RequestBody VentaRequest request) {
         return ventaService.registrarVenta(request);
     }
+
+    @PostMapping("/{id}/anular")
+    public void anular(@PathVariable Integer id) {
+        ventaService.anularVenta(id);
+    }
 }

@@ -13,4 +13,6 @@ public interface DeudaClienteRepository extends JpaRepository<DeudaCliente, Inte
            "JOIN FETCH d.venta v " +
            "JOIN FETCH v.sucursal")
     List<DeudaCliente> listarConDatos();
+
+    List<DeudaCliente> findByVentaIdVenta(Integer idVenta);
 }

@@ -4,4 +4,6 @@ import com.reyescompany.app.model.TipoMovimiento;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface TipoMovimientoRepository extends JpaRepository<TipoMovimiento, Integer> {
+
+    TipoMovimiento findFirstByNombre(String nombre);
 }
