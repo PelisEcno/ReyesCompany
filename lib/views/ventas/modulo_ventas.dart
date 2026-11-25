@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../services/database_service.dart';
 import '../../models/models.dart';
@@ -51,6 +52,7 @@ class _ModuloVentasState extends State<ModuloVentas> with SingleTickerProviderSt
   List<Venta>         _historial  = [];
   List<ItemCarrito>   _carrito    = [];
   bool _cargando = true;
+  Timer? _refresco;
   String _busqueda = "";
   MetodoPago? _metodoSelec;
   TipoVenta _tipoVenta = TipoVenta.contado;
@@ -70,6 +72,7 @@ class _ModuloVentasState extends State<ModuloVentas> with SingleTickerProviderSt
       if (_tabCtrl.index == 2) _cargarResumen();
     });
     _cargarDatos();
+    _refresco = Timer.periodic(const Duration(seconds: 30), (_) => _refrescarProductos());
   }
 
   @override
@@ -79,7 +82,19 @@ class _ModuloVentasState extends State<ModuloVentas> with SingleTickerProviderSt
   }
 
   @override
-  void dispose() { _tabCtrl.dispose(); super.dispose(); }
+  void dispose() {
+    _refresco?.cancel();
+    _tabCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _refrescarProductos() async {
+    try {
+      final productos = await _svc.getProductosConStock(idSucursal: widget.idSucursal);
+      if (!mounted) return;
+      setState(() => _productos = productos.map((p) => ProductoVenta.fromProducto(p)).toList());
+    } catch (_) {}
+  }
 
   Future<void> _cargarDatos() async {
     setState(() => _cargando = true);

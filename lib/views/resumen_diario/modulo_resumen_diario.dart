@@ -2,6 +2,7 @@
 // CU03 – Generar resumen diario
 // Acceso: Administrador y Empleado
 
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../services/database_service.dart';
 import '../../services/export_service.dart';
@@ -40,25 +41,67 @@ class _ModuloResumenDiarioState extends State<ModuloResumenDiario> {
   DateTime _fechaSeleccionada = DateTime.now();
   bool     _cargando          = true;
   bool     _exportando        = false;
+  bool     _mensual           = false;
   Map<String, dynamic> _data  = {};
+  Timer?   _refresco;
 
   @override
-  void initState() { super.initState(); _cargar(); }
+  void initState() {
+    super.initState();
+    _cargar();
+    _refresco = Timer.periodic(const Duration(seconds: 30), (_) {
+      if (_esPeriodoActual) _cargar(silencioso: true);
+    });
+  }
 
-  // ── Carga de datos ──────────────────────────────────────────────────────────
-  Future<void> _cargar() async {
-    setState(() => _cargando = true);
+  @override
+  void dispose() {
+    _refresco?.cancel();
+    super.dispose();
+  }
+
+  bool get _esPeriodoActual {
+    final hoy = DateTime.now();
+    if (_mensual) return _fechaSeleccionada.year == hoy.year && _fechaSeleccionada.month == hoy.month;
+    return _esHoy(_fechaSeleccionada);
+  }
+
+  Future<void> _cargar({bool silencioso = false}) async {
+    if (!silencioso) setState(() => _cargando = true);
     try {
-      final d = await _svc.getResumenFecha(
-        fecha:      _fechaSeleccionada,
-        idSucursal: widget.idSucursal,
-      );
+      final d = _mensual
+          ? await _svc.getResumenRango(
+              desde:      DateTime(_fechaSeleccionada.year, _fechaSeleccionada.month, 1),
+              hasta:      DateTime(_fechaSeleccionada.year, _fechaSeleccionada.month + 1, 0),
+              idSucursal: widget.idSucursal,
+            )
+          : await _svc.getResumenFecha(
+              fecha:      _fechaSeleccionada,
+              idSucursal: widget.idSucursal,
+            );
+      if (!mounted) return;
       setState(() => _data = d);
     } catch (_) {
-      setState(() => _data = {});
+      if (mounted && !silencioso) setState(() => _data = {});
     } finally {
-      if (mounted) setState(() => _cargando = false);
+      if (mounted && !silencioso) setState(() => _cargando = false);
     }
+  }
+
+  void _cambiarModo(bool mensual) {
+    if (_mensual == mensual) return;
+    setState(() => _mensual = mensual);
+    _cargar();
+  }
+
+  void _moverMes(int delta) {
+    setState(() => _fechaSeleccionada = DateTime(_fechaSeleccionada.year, _fechaSeleccionada.month + delta, 1));
+    _cargar();
+  }
+
+  bool get _puedeAvanzarMes {
+    final hoy = DateTime.now();
+    return _fechaSeleccionada.year * 12 + _fechaSeleccionada.month < hoy.year * 12 + hoy.month;
   }
 
   // ── Selector de fecha ───────────────────────────────────────────────────────
@@ -91,6 +134,7 @@ class _ModuloResumenDiarioState extends State<ModuloResumenDiario> {
         formato: formato, sucursalNombre: widget.sucursalNombre,         // 'PDF' | 'Excel'
         idSucursal: widget.idSucursal,
         data:       _data,
+        mensual:    _mensual,
       );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -148,44 +192,99 @@ class _ModuloResumenDiarioState extends State<ModuloResumenDiario> {
       color:  _cWhite,
       border: Border(bottom: BorderSide(color: _cBorder)),
     ),
-    child: Row(children: [
-      // Selector de fecha
-      GestureDetector(
-        onTap: _seleccionarFecha,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-          decoration: BoxDecoration(
-            color:        _cBg,
-            borderRadius: BorderRadius.circular(12),
-            border:       Border.all(color: _cBorder),
+    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Row(children: [
+        _toggleModo(),
+        const Spacer(),
+        _exportando
+            ? const SizedBox(
+            width: 24, height: 24,
+            child: CircularProgressIndicator(strokeWidth: 2, color: _cAccent))
+            : ElevatedButton.icon(
+          onPressed: _mostrarExportacion,
+          icon:      const Icon(Icons.download_rounded, size: 16),
+          label:     const Text('Exportar', style: TextStyle(fontSize: 13)),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: _cAccent,
+            foregroundColor: Colors.white,
+            padding:         const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
+            shape:           RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            elevation:       0,
           ),
-          child: Row(mainAxisSize: MainAxisSize.min, children: [
-            const Icon(Icons.calendar_today_rounded, size: 15, color: _cAccent),
-            const SizedBox(width: 8),
-            Text(_labelFecha(_fechaSeleccionada),
-                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: _cText)),
-            const SizedBox(width: 6),
-            const Icon(Icons.expand_more_rounded, size: 16, color: _cSubtext),
-          ]),
         ),
+      ]),
+      const SizedBox(height: 12),
+      _mensual ? _selectorMes() : _selectorDia(),
+    ]),
+  );
+
+  Widget _toggleModo() => Container(
+    padding: const EdgeInsets.all(3),
+    decoration: BoxDecoration(
+      color:        _cBg,
+      borderRadius: BorderRadius.circular(12),
+      border:       Border.all(color: _cBorder),
+    ),
+    child: Row(mainAxisSize: MainAxisSize.min, children: [
+      _opcionModo('Día', !_mensual, () => _cambiarModo(false)),
+      _opcionModo('Mes', _mensual, () => _cambiarModo(true)),
+    ]),
+  );
+
+  Widget _opcionModo(String texto, bool activo, VoidCallback alTocar) => GestureDetector(
+    onTap: alTocar,
+    child: Container(
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
+      decoration: BoxDecoration(
+        color:        activo ? _cAccent : Colors.transparent,
+        borderRadius: BorderRadius.circular(9),
       ),
-      const Spacer(),
-      // Botón exportar (CU08 – Generar reportes/exportación)
-      _exportando
-          ? const SizedBox(
-          width: 24, height: 24,
-          child: CircularProgressIndicator(strokeWidth: 2, color: _cAccent))
-          : ElevatedButton.icon(
-        onPressed: _mostrarExportacion,
-        icon:      const Icon(Icons.download_rounded, size: 16),
-        label:     const Text('Exportar', style: TextStyle(fontSize: 13)),
-        style: ElevatedButton.styleFrom(
-          backgroundColor: _cAccent,
-          foregroundColor: Colors.white,
-          padding:         const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
-          shape:           RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          elevation:       0,
-        ),
+      child: Text(texto,
+          style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600,
+              color: activo ? Colors.white : _cSubtext)),
+    ),
+  );
+
+  Widget _selectorDia() => GestureDetector(
+    onTap: _seleccionarFecha,
+    child: Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color:        _cBg,
+        borderRadius: BorderRadius.circular(12),
+        border:       Border.all(color: _cBorder),
+      ),
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
+        const Icon(Icons.calendar_today_rounded, size: 15, color: _cAccent),
+        const SizedBox(width: 8),
+        Text(_labelFecha(_fechaSeleccionada),
+            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: _cText)),
+        const SizedBox(width: 6),
+        const Icon(Icons.expand_more_rounded, size: 16, color: _cSubtext),
+      ]),
+    ),
+  );
+
+  Widget _selectorMes() => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 4),
+    decoration: BoxDecoration(
+      color:        _cBg,
+      borderRadius: BorderRadius.circular(12),
+      border:       Border.all(color: _cBorder),
+    ),
+    child: Row(mainAxisSize: MainAxisSize.min, children: [
+      IconButton(
+        onPressed: () => _moverMes(-1),
+        icon: const Icon(Icons.chevron_left_rounded, color: _cAccent),
+      ),
+      Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8),
+        child: Text(_labelMes(_fechaSeleccionada),
+            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: _cText)),
+      ),
+      IconButton(
+        onPressed: _puedeAvanzarMes ? () => _moverMes(1) : null,
+        icon: Icon(Icons.chevron_right_rounded, color: _puedeAvanzarMes ? _cAccent : _cBorder),
       ),
     ]),
   );
@@ -236,6 +335,13 @@ class _ModuloResumenDiarioState extends State<ModuloResumenDiario> {
           const SizedBox(height: 20),
         ],
 
+        if (_mensual && ((_data['por_dia'] as List?) ?? []).isNotEmpty) ...[
+          _labelSeccion('Ventas por día'),
+          const SizedBox(height: 10),
+          _cardDias((_data['por_dia'] as List)),
+          const SizedBox(height: 20),
+        ],
+
         // ── Productos más vendidos ───────────────────────────────────────────
         if (productos.isNotEmpty) ...[
           _labelSeccion('Productos vendidos'),
@@ -264,8 +370,9 @@ class _ModuloResumenDiarioState extends State<ModuloResumenDiario> {
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Row(children: [
             Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              const Text('Total del día', style: TextStyle(color: Colors.white70, fontSize: 13)),
-              Text(_labelFecha(_fechaSeleccionada),
+              Text(_mensual ? 'Total del mes' : 'Total del día',
+                  style: const TextStyle(color: Colors.white70, fontSize: 13)),
+              Text(_labelPeriodo(),
                   style: const TextStyle(color: Colors.white38, fontSize: 11)),
             ]),
             const Spacer(),
@@ -422,14 +529,14 @@ class _ModuloResumenDiarioState extends State<ModuloResumenDiario> {
         const Text('Sin datos disponibles',
             style: TextStyle(color: _cText, fontSize: 16, fontWeight: FontWeight.w700)),
         const SizedBox(height: 8),
-        Text('No hay ventas registradas para\n${_labelFecha(_fechaSeleccionada)}.',
+        Text('No hay ventas registradas para\n${_labelPeriodo()}.',
             textAlign: TextAlign.center,
             style: const TextStyle(color: _cSubtext, fontSize: 13)),
         const SizedBox(height: 24),
         OutlinedButton.icon(
-          onPressed: _seleccionarFecha,
+          onPressed: _mensual ? () => _moverMes(-1) : _seleccionarFecha,
           icon:      const Icon(Icons.calendar_today_rounded, size: 15),
-          label:     const Text('Cambiar fecha'),
+          label:     Text(_mensual ? 'Mes anterior' : 'Cambiar fecha'),
           style: OutlinedButton.styleFrom(
             foregroundColor: _cAccent,
             side:            const BorderSide(color: _cAccent),
@@ -441,7 +548,60 @@ class _ModuloResumenDiarioState extends State<ModuloResumenDiario> {
     ),
   );
 
-  // ── Helpers ───────────────────────────────────────────────────────────────
+  Widget _cardDias(List dias) {
+    double maximo = 0;
+    for (final d in dias) {
+      final total = (d['total'] as num?)?.toDouble() ?? 0;
+      if (total > maximo) maximo = total;
+    }
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: _cardDeco(),
+      child: Column(children: List.generate(dias.length, (i) {
+        final d      = dias[i];
+        final total  = (d['total'] as num?)?.toDouble() ?? 0;
+        final cant   = (d['cantidad'] as num?)?.toInt() ?? 0;
+        final fecha  = DateTime.tryParse(d['fecha']?.toString() ?? '');
+        final etiqueta = fecha != null ? '${fecha.day} ${_nombreMesCorto(fecha.month)}' : '';
+        return Padding(
+          padding: EdgeInsets.only(bottom: i < dias.length - 1 ? 12 : 0),
+          child: Row(children: [
+            SizedBox(width: 56, child: Text(etiqueta,
+                style: const TextStyle(color: _cText, fontWeight: FontWeight.w600, fontSize: 12))),
+            Expanded(child: ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: LinearProgressIndicator(
+                value:           maximo > 0 ? total / maximo : 0,
+                minHeight:       6,
+                backgroundColor: _cAccent.withOpacity(0.08),
+                valueColor:      const AlwaysStoppedAnimation<Color>(_cAccent),
+              ),
+            )),
+            const SizedBox(width: 10),
+            Text('$cant venta${cant != 1 ? "s" : ""}',
+                style: const TextStyle(color: _cSubtext, fontSize: 10)),
+            const SizedBox(width: 10),
+            SizedBox(width: 64, child: Text('\$${_fmt(total)}',
+                textAlign: TextAlign.right,
+                style: const TextStyle(color: _cAccent, fontWeight: FontWeight.w700, fontSize: 12))),
+          ]),
+        );
+      })),
+    );
+  }
+
+  String _labelPeriodo() => _mensual ? _labelMes(_fechaSeleccionada) : _labelFecha(_fechaSeleccionada);
+
+  String _labelMes(DateTime f) {
+    const m = ['','Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+    return '${m[f.month]} ${f.year}';
+  }
+
+  String _nombreMesCorto(int mes) {
+    const m = ['','Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+    return m[mes];
+  }
+
   Widget _metrica(String valor, String label, String sub, IconData icono, Color color) =>
       Expanded(child: Container(
         padding: const EdgeInsets.all(14),
@@ -543,7 +703,7 @@ class _BottomSheetExportacion extends StatelessWidget {
       const Text('Exportar resumen',
           style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: _cText)),
       const SizedBox(height: 6),
-      const Text('Elige el formato en que deseas exportar el resumen del día.',
+      const Text('Elige el formato en que deseas exportar el resumen.',
           style: TextStyle(fontSize: 13, color: _cSubtext)),
       const SizedBox(height: 20),
       // Opción PDF

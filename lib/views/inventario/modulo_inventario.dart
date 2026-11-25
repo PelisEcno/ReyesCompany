@@ -1,6 +1,10 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../services/database_service.dart';
+import '../../services/export_service.dart';
 import '../../models/models.dart';
+import '../shared/exportar_hoja.dart';
+import 'modulo_movimientos.dart';
 
 const kPrimary = Color(0xFF1A5276);
 const kAccent  = Color(0xFF2E86C1);
@@ -9,9 +13,10 @@ const kDanger  = Color(0xFFE74C3C);
 const kBg      = Color(0xFFF0F4F8);
 
 class ModuloInventario extends StatefulWidget {
+  final String idUsuario;
   final String? idSucursal;
   final bool esAdminGlobal;
-  const ModuloInventario({super.key, this.idSucursal, this.esAdminGlobal = false});
+  const ModuloInventario({super.key, required this.idUsuario, this.idSucursal, this.esAdminGlobal = false});
   @override
   State<ModuloInventario> createState() => _ModuloInventarioState();
 }
@@ -26,11 +31,22 @@ class _ModuloInventarioState extends State<ModuloInventario> {
   String _busqueda  = "";
   String _catFiltro = "";
 
-  // La sucursal activa viene del widget (dashboard selector)
+  Timer? _refresco;
+
   String? get _sucursalActiva => widget.idSucursal;
 
   @override
-  void initState() { super.initState(); _cargarDatos(); }
+  void initState() {
+    super.initState();
+    _cargarDatos();
+    _refresco = Timer.periodic(const Duration(seconds: 30), (_) => _cargarDatos(silencioso: true));
+  }
+
+  @override
+  void dispose() {
+    _refresco?.cancel();
+    super.dispose();
+  }
 
   @override
   void didUpdateWidget(ModuloInventario old) {
@@ -39,22 +55,60 @@ class _ModuloInventarioState extends State<ModuloInventario> {
     if (old.idSucursal != widget.idSucursal) _cargarDatos();
   }
 
-  Future<void> _cargarDatos() async {
-    setState(() => _cargando = true);
+  Future<void> _cargarDatos({bool silencioso = false}) async {
+    if (!silencioso) setState(() => _cargando = true);
     try {
       final results = await Future.wait([
         _svc.getProductos(idSucursal: _sucursalActiva),
         _svc.getCategorias(),
         _svc.getSucursales(),
       ]);
+      if (!mounted) return;
       setState(() {
         _productos  = results[0] as List<Producto>;
         _categorias = results[1] as List<Categoria>;
         _sucursales = results[2] as List<Sucursal>;
         _aplicarFiltro();
       });
-    } catch (e) { _snack("Error al cargar: $e", kDanger); }
-    finally { if (mounted) setState(() => _cargando = false); }
+    } catch (e) { if (!silencioso) _snack("Error al cargar: $e", kDanger); }
+    finally { if (mounted && !silencioso) setState(() => _cargando = false); }
+  }
+
+  String _limpiar(Object error) => error.toString().replaceFirst('Exception: ', '');
+
+  String _fechaArchivo() {
+    final n = DateTime.now();
+    return '${n.year}-${n.month.toString().padLeft(2, '0')}-${n.day.toString().padLeft(2, '0')}';
+  }
+
+  void _abrirMovimientos() {
+    Navigator.push(context, MaterialPageRoute(
+      builder: (_) => ModuloMovimientos(idUsuario: widget.idUsuario, idSucursal: _sucursalActiva),
+    )).then((_) => _cargarDatos());
+  }
+
+  void _exportar() {
+    if (_filtrados.isEmpty) { _snack("No hay productos para exportar", kDanger); return; }
+    mostrarExportacion(
+      context,
+      titulo: "Exportar productos",
+      descripcion: "Elige el formato para exportar el inventario de ${_etiquetaSucursal()}.",
+      alElegir: (formato) async {
+        try {
+          await ExportService.instance.exportarTabla(
+            titulo: "Inventario de productos",
+            subtitulo: "${_etiquetaSucursal()} · ${_filtrados.length} productos",
+            encabezados: ["Producto", "Categoría", "Precio compra", "Precio venta", "Ganancia", "Stock", "Stock mínimo"],
+            filas: _filtrados.map<List<Object>>((p) => [
+              p.nombre, p.categoriaNombre, p.precioCompra, p.precioVenta, p.ganancia, p.stockActual, p.stockMinimo,
+            ]).toList(),
+            formato: formato,
+            nombreArchivo: "productos_${_fechaArchivo()}",
+          );
+          _snack("Productos exportados como $formato", kSuccess);
+        } catch (e) { _snack("Error al exportar: ${_limpiar(e)}", kDanger); }
+      },
+    );
   }
 
   void _aplicarFiltro() {
@@ -94,7 +148,7 @@ class _ModuloInventarioState extends State<ModuloInventario> {
         _snack("Producto actualizado", kSuccess);
       }
       _cargarDatos();
-    } catch (e) { _snack("Error: $e", kDanger); }
+    } catch (e) { _snack(_limpiar(e), kDanger); }
   }
 
   Future<void> _eliminar(String id) async {
@@ -319,6 +373,10 @@ class _ModuloInventarioState extends State<ModuloInventario> {
                 side: BorderSide(color: Colors.grey[200]!), backgroundColor: Colors.white),
             child: const Icon(Icons.refresh_rounded, color: kAccent, size: 20),
           )),
+          const SizedBox(width: 8),
+          _botonIcono(Icons.swap_vert_rounded, "Movimientos de inventario", _abrirMovimientos),
+          const SizedBox(width: 8),
+          _botonIcono(Icons.download_rounded, "Exportar productos", _exportar),
         ]),
         const SizedBox(height: 16),
 
@@ -449,6 +507,17 @@ class _ModuloInventarioState extends State<ModuloInventario> {
             Text(label, style: TextStyle(fontSize: 11, color: Colors.grey[400]), overflow: TextOverflow.ellipsis),
           ])),
         ])),
+  );
+
+  Widget _botonIcono(IconData icono, String ayuda, VoidCallback alTocar) => Tooltip(
+    message: ayuda,
+    child: SizedBox(height: 44, width: 44, child: OutlinedButton(
+      onPressed: alTocar,
+      style: OutlinedButton.styleFrom(padding: EdgeInsets.zero,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          side: BorderSide(color: Colors.grey[200]!), backgroundColor: Colors.white),
+      child: Icon(icono, color: kAccent, size: 20),
+    )),
   );
 
   Widget _iconBtn(IconData icon, Color color, VoidCallback onTap, {double size = 18}) =>

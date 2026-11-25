@@ -1,49 +1,165 @@
-// export_service.dart
-// Genera y comparte el resumen del día en PDF o Excel.
-//
-// Añade en pubspec.yaml (bajo dependencies):
-//   pdf: ^3.11.1
-//   printing: ^5.13.1
-//   excel: ^4.0.3
-//   path_provider: ^2.1.4
-//   share_plus: ^10.0.2
-
-import 'dart:io';
-import 'package:flutter/services.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'package:excel/excel.dart';
-import 'package:share_plus/share_plus.dart';
+import 'guardar_archivo.dart';
 
 class ExportService {
   ExportService._();
   static final ExportService instance = ExportService._();
 
-  // ── Punto de entrada público ─────────────────────────────────────────────
+  static const String _mimeExcel = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+
   Future<void> exportarResumen({
     required DateTime             fecha,
-    required String               formato,  // 'PDF' | 'Excel'
+    required String               formato,
     String?                       sucursalNombre,
-    required Map<String, dynamic> data, String? idSucursal,
+    required Map<String, dynamic> data,
+    String?                       idSucursal,
+    bool                          mensual = false,
   }) async {
     if (formato == 'PDF') {
-      await _generarPDF(fecha: fecha, sucursalNombre: sucursalNombre, data: data);
+      await _generarPDF(fecha: fecha, sucursalNombre: sucursalNombre, data: data, mensual: mensual);
     } else {
-      await _generarExcel(fecha: fecha, sucursalNombre: sucursalNombre, data: data);
+      await _generarExcel(fecha: fecha, sucursalNombre: sucursalNombre, data: data, mensual: mensual);
     }
   }
 
-  // ══════════════════════════════════════════════════════════════════════════
-  // PDF
-  // ══════════════════════════════════════════════════════════════════════════
+  Future<void> exportarTabla({
+    required String             titulo,
+    required String             subtitulo,
+    required List<String>       encabezados,
+    required List<List<Object>> filas,
+    required String             formato,
+    required String             nombreArchivo,
+  }) async {
+    if (formato == 'PDF') {
+      await _tablaPDF(titulo, subtitulo, encabezados, filas, nombreArchivo);
+    } else {
+      await _tablaExcel(titulo, subtitulo, encabezados, filas, nombreArchivo);
+    }
+  }
+
+  Future<void> _tablaPDF(String titulo, String subtitulo, List<String> encabezados,
+      List<List<Object>> filas, String nombreArchivo) async {
+    final azul  = PdfColor.fromHex('2563EB');
+    final gris  = PdfColor.fromHex('64748B');
+    final borde = PdfColor.fromHex('E2E8F0');
+    final fondo = PdfColor.fromHex('F1F5F9');
+
+    final doc    = pw.Document();
+    final fuente = await PdfGoogleFonts.nunitoRegular();
+    final negrita = await PdfGoogleFonts.nunitoBold();
+
+    final alineaciones = <int, pw.Alignment>{};
+    for (int c = 0; c < encabezados.length; c++) {
+      final esNumero = filas.isNotEmpty && filas.first.length > c && filas.first[c] is num;
+      alineaciones[c] = esNumero ? pw.Alignment.centerRight : pw.Alignment.centerLeft;
+    }
+
+    doc.addPage(pw.MultiPage(
+      pageFormat: encabezados.length > 6 ? PdfPageFormat.a4.landscape : PdfPageFormat.a4,
+      margin:     const pw.EdgeInsets.all(32),
+      theme:      pw.ThemeData.withFont(base: fuente, bold: negrita),
+      build: (contexto) => [
+        pw.Container(
+          padding: const pw.EdgeInsets.all(18),
+          decoration: pw.BoxDecoration(
+            color:        azul,
+            borderRadius: const pw.BorderRadius.all(pw.Radius.circular(10)),
+          ),
+          child: pw.Row(
+            mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+            children: [
+              pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
+                pw.Text(titulo, style: pw.TextStyle(font: negrita, fontSize: 18, color: PdfColors.white)),
+                pw.SizedBox(height: 4),
+                pw.Text(subtitulo, style: pw.TextStyle(fontSize: 11, color: PdfColor.fromHex('CBD5E1'))),
+              ]),
+              pw.Text('ReyesCompany', style: pw.TextStyle(font: negrita, fontSize: 13, color: PdfColors.white)),
+            ],
+          ),
+        ),
+        pw.SizedBox(height: 16),
+        pw.TableHelper.fromTextArray(
+          context:           contexto,
+          headers:           encabezados,
+          data:              filas.map((f) => f.map(_textoCelda).toList()).toList(),
+          headerStyle:       pw.TextStyle(font: negrita, fontSize: 9, color: PdfColors.white),
+          headerDecoration:  pw.BoxDecoration(color: azul),
+          cellStyle:         const pw.TextStyle(fontSize: 9),
+          cellAlignments:    alineaciones,
+          oddRowDecoration:  pw.BoxDecoration(color: fondo),
+          border:            pw.TableBorder.all(color: borde, width: 0.5),
+          cellPadding:       const pw.EdgeInsets.all(6),
+        ),
+        pw.SizedBox(height: 12),
+        pw.Text('Total de registros: ${filas.length}   ·   Generado el ${_labelFechaCompleta(DateTime.now())}',
+            style: pw.TextStyle(fontSize: 9, color: gris)),
+      ],
+    ));
+
+    await Printing.sharePdf(bytes: await doc.save(), filename: '$nombreArchivo.pdf');
+  }
+
+  Future<void> _tablaExcel(String titulo, String subtitulo, List<String> encabezados,
+      List<List<Object>> filas, String nombreArchivo) async {
+    final excel = Excel.createExcel();
+    final hoja  = excel['Datos'];
+    excel.setDefaultSheet('Datos');
+    excel.delete('Sheet1');
+
+    final estiloTitulo = CellStyle(
+      bold: true,
+      backgroundColorHex: ExcelColor.fromHexString('2563EB'),
+      fontColorHex: ExcelColor.fromHexString('FFFFFF'),
+      fontSize: 13,
+    );
+    final estiloCab = CellStyle(
+      bold: true,
+      backgroundColorHex: ExcelColor.fromHexString('F1F5F9'),
+      fontColorHex: ExcelColor.fromHexString('0F172A'),
+    );
+
+    hoja.cell(CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: 0)).value = TextCellValue('ReyesCompany – $titulo');
+    hoja.cell(CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: 0)).cellStyle = estiloTitulo;
+    hoja.merge(
+      CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: 0),
+      CellIndex.indexByColumnRow(columnIndex: encabezados.length - 1, rowIndex: 0),
+    );
+    hoja.cell(CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: 1)).value = TextCellValue(subtitulo);
+
+    for (int c = 0; c < encabezados.length; c++) {
+      final celda = hoja.cell(CellIndex.indexByColumnRow(columnIndex: c, rowIndex: 3));
+      celda.value = TextCellValue(encabezados[c]);
+      celda.cellStyle = estiloCab;
+    }
+
+    for (int f = 0; f < filas.length; f++) {
+      for (int c = 0; c < filas[f].length; c++) {
+        final valor = filas[f][c];
+        final celda = hoja.cell(CellIndex.indexByColumnRow(columnIndex: c, rowIndex: 4 + f));
+        if (valor is int) {
+          celda.value = IntCellValue(valor);
+        } else if (valor is double) {
+          celda.value = DoubleCellValue(valor);
+        } else {
+          celda.value = TextCellValue(valor.toString());
+        }
+      }
+    }
+
+    final bytes = excel.save();
+    if (bytes == null) throw Exception('Error al generar el archivo Excel');
+    await guardarArchivo(bytes, '$nombreArchivo.xlsx', _mimeExcel);
+  }
+
   Future<void> _generarPDF({
     required DateTime             fecha,
     String?                       sucursalNombre,
     required Map<String, dynamic> data,
+    required bool                 mensual,
   }) async {
-    // Colores de la app
     final azul    = PdfColor.fromHex('2563EB');
     final gris    = PdfColor.fromHex('64748B');
     final borde   = PdfColor.fromHex('E2E8F0');
@@ -55,7 +171,6 @@ class ExportService {
     final fuente = await PdfGoogleFonts.nunitoRegular();
     final fNegri = await PdfGoogleFonts.nunitoBold();
 
-    // Datos del resumen
     final totalDia     = _dbl(data, 'total_dia');
     final totalVentas  = _dbl(data, 'total_ventas');
     final totalAbonos  = _dbl(data, 'total_abonos');
@@ -65,14 +180,17 @@ class ExportService {
     final cantFiados   = _int(data, 'cantidad_fiados');
     final metodos      = (data['ventas_por_metodo']  as List?) ?? [];
     final productos    = (data['productos_vendidos'] as List?) ?? [];
+    final dias         = (data['por_dia']            as List?) ?? [];
+
+    final tituloResumen = mensual ? 'Resumen del mes' : 'Resumen del día';
+    final etiquetaTotal = mensual ? 'Total del mes' : 'Total del día';
+    final periodo       = mensual ? _labelMes(fecha) : _labelFecha(fecha);
 
     doc.addPage(pw.MultiPage(
       pageFormat:   PdfPageFormat.a4,
       margin:       const pw.EdgeInsets.all(36),
       theme:        pw.ThemeData.withFont(base: fuente, bold: fNegri),
       build: (ctx) => [
-
-        // ── Encabezado ────────────────────────────────────────────────────
         pw.Container(
           padding: const pw.EdgeInsets.all(20),
           decoration: pw.BoxDecoration(
@@ -83,10 +201,10 @@ class ExportService {
             mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
             children: [
               pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
-                pw.Text('Resumen del día',
+                pw.Text(tituloResumen,
                     style: pw.TextStyle(font: fNegri, fontSize: 20, color: PdfColors.white)),
                 pw.SizedBox(height: 4),
-                pw.Text(_labelFecha(fecha),
+                pw.Text(periodo,
                     style: pw.TextStyle(fontSize: 12, color: PdfColor.fromHex('CBD5E1'))),
                 if (sucursalNombre != null && sucursalNombre.isNotEmpty) ...[
                   pw.SizedBox(height: 2),
@@ -98,7 +216,7 @@ class ExportService {
                 pw.Text('ReyesCompany',
                     style: pw.TextStyle(font: fNegri, fontSize: 13, color: PdfColors.white)),
                 pw.SizedBox(height: 4),
-                pw.Text('Total del día',
+                pw.Text(etiquetaTotal,
                     style: pw.TextStyle(fontSize: 10, color: PdfColor.fromHex('CBD5E1'))),
                 pw.Text('\$${_fmt(totalDia)}',
                     style: pw.TextStyle(font: fNegri, fontSize: 22, color: PdfColors.white)),
@@ -109,7 +227,6 @@ class ExportService {
 
         pw.SizedBox(height: 20),
 
-        // ── Métricas principales ──────────────────────────────────────────
         pw.Row(children: [
           _pdfMetrica(fNegri, 'Ventas contado', totalVentas, '$cantVentas transac.', azul),
           pw.SizedBox(width: 10),
@@ -122,7 +239,6 @@ class ExportService {
 
         pw.SizedBox(height: 20),
 
-        // ── Métodos de pago ───────────────────────────────────────────────
         if (metodos.isNotEmpty) ...[
           pw.Text('Desglose por método de pago',
               style: pw.TextStyle(font: fNegri, fontSize: 13)),
@@ -136,7 +252,6 @@ class ExportService {
               3: const pw.FlexColumnWidth(1.5),
             },
             children: [
-              // Cabecera
               pw.TableRow(
                 decoration: pw.BoxDecoration(color: fondo),
                 children: ['Método', 'Ventas', 'Subtotal', '%']
@@ -147,16 +262,15 @@ class ExportService {
                 ))
                     .toList(),
               ),
-              // Filas
               ...metodos.map((m) {
                 final sub  = _dbl(m as Map, 'subtotal');
                 final cant = _int(m, 'cantidad');
                 final pct  = totalVentas > 0 ? (sub / totalVentas * 100) : 0;
                 return pw.TableRow(children: [
-                  _celda(m['metodo']?.toString() ?? '', fNegri),
-                  _celda('$cant', fNegri),
-                  _celda('\$${_fmt(sub)}', fNegri),
-                  _celda('${pct.toStringAsFixed(0)}%', fNegri),
+                  _celda(m['metodo']?.toString() ?? ''),
+                  _celda('$cant'),
+                  _celda('\$${_fmt(sub)}'),
+                  _celda('${pct.toStringAsFixed(0)}%'),
                 ]);
               }),
             ],
@@ -164,7 +278,38 @@ class ExportService {
           pw.SizedBox(height: 20),
         ],
 
-        // ── Productos vendidos ────────────────────────────────────────────
+        if (mensual && dias.isNotEmpty) ...[
+          pw.Text('Ventas por día',
+              style: pw.TextStyle(font: fNegri, fontSize: 13)),
+          pw.SizedBox(height: 8),
+          pw.Table(
+            border: pw.TableBorder.all(color: borde, width: 0.5),
+            columnWidths: {
+              0: const pw.FlexColumnWidth(3),
+              1: const pw.FlexColumnWidth(1.5),
+              2: const pw.FlexColumnWidth(2),
+            },
+            children: [
+              pw.TableRow(
+                decoration: pw.BoxDecoration(color: fondo),
+                children: ['Fecha', 'Ventas', 'Total']
+                    .map((h) => pw.Padding(
+                  padding: const pw.EdgeInsets.all(8),
+                  child: pw.Text(h,
+                      style: pw.TextStyle(font: fNegri, fontSize: 10, color: gris)),
+                ))
+                    .toList(),
+              ),
+              ...dias.map((d) => pw.TableRow(children: [
+                _celda(d['fecha']?.toString() ?? ''),
+                _celda('${_int(d as Map, 'cantidad')}'),
+                _celda('\$${_fmt(_dbl(d, 'total'))}'),
+              ])),
+            ],
+          ),
+          pw.SizedBox(height: 20),
+        ],
+
         if (productos.isNotEmpty) ...[
           pw.Text('Productos vendidos',
               style: pw.TextStyle(font: fNegri, fontSize: 13)),
@@ -195,10 +340,10 @@ class ExportService {
                   decoration: pw.BoxDecoration(
                       color: i.isOdd ? fondo : PdfColors.white),
                   children: [
-                    _celda('${i + 1}', fNegri),
-                    _celda(p['nombre']?.toString() ?? '', fNegri),
-                    _celda('${_int(p, 'cantidad')}', fNegri),
-                    _celda('\$${_fmt(_dbl(p, 'total'))}', fNegri),
+                    _celda('${i + 1}'),
+                    _celda(p['nombre']?.toString() ?? ''),
+                    _celda('${_int(p, 'cantidad')}'),
+                    _celda('\$${_fmt(_dbl(p, 'total'))}'),
                   ],
                 );
               }),
@@ -207,7 +352,6 @@ class ExportService {
           pw.SizedBox(height: 20),
         ],
 
-        // ── Pie ───────────────────────────────────────────────────────────
         pw.Divider(color: borde),
         pw.SizedBox(height: 6),
         pw.Text('Generado el ${_labelFechaCompleta(DateTime.now())}',
@@ -215,10 +359,9 @@ class ExportService {
       ],
     ));
 
-    // Compartir / imprimir
     await Printing.sharePdf(
       bytes:    await doc.save(),
-      filename: 'resumen_${_dateToStr(fecha)}.pdf',
+      filename: '${_nombreResumen(fecha, mensual)}.pdf',
     );
   }
 
@@ -241,24 +384,22 @@ class ExportService {
         ),
       );
 
-  pw.Widget _celda(String texto, pw.Font fNegri) => pw.Padding(
+  pw.Widget _celda(String texto) => pw.Padding(
     padding: const pw.EdgeInsets.all(8),
     child:   pw.Text(texto, style: pw.TextStyle(fontSize: 10)),
   );
 
-  // ══════════════════════════════════════════════════════════════════════════
-  // EXCEL
-  // ══════════════════════════════════════════════════════════════════════════
   Future<void> _generarExcel({
     required DateTime             fecha,
     String?                       sucursalNombre,
     required Map<String, dynamic> data,
+    required bool                 mensual,
   }) async {
     final excel = Excel.createExcel();
 
-    // ── Hoja 1: Resumen ───────────────────────────────────────────────────
     final sheet1 = excel['Resumen'];
     excel.setDefaultSheet('Resumen');
+    excel.delete('Sheet1');
 
     final estiloTitulo = CellStyle(
       bold:            true,
@@ -272,17 +413,17 @@ class ExportService {
       fontColorHex:    ExcelColor.fromHexString('0F172A'),
     );
 
-    // Título
-    sheet1.cell(CellIndex.indexByString('A1')).value = TextCellValue('ReyesCompany – Resumen del día');
+    final periodo = mensual ? _labelMes(fecha) : _labelFecha(fecha);
+
+    sheet1.cell(CellIndex.indexByString('A1')).value = TextCellValue(mensual ? 'ReyesCompany – Resumen del mes' : 'ReyesCompany – Resumen del día');
     sheet1.cell(CellIndex.indexByString('A1')).cellStyle = estiloTitulo;
     sheet1.merge(CellIndex.indexByString('A1'), CellIndex.indexByString('D1'));
 
-    sheet1.cell(CellIndex.indexByString('A2')).value = TextCellValue(_labelFecha(fecha));
+    sheet1.cell(CellIndex.indexByString('A2')).value = TextCellValue(periodo);
     if (sucursalNombre != null && sucursalNombre.isNotEmpty) {
       sheet1.cell(CellIndex.indexByString('B2')).value = TextCellValue(sucursalNombre);
     }
 
-    // Métricas
     sheet1.cell(CellIndex.indexByString('A4')).value = TextCellValue('Concepto');
     sheet1.cell(CellIndex.indexByString('B4')).value = TextCellValue('Monto');
     sheet1.cell(CellIndex.indexByString('C4')).value = TextCellValue('Cantidad');
@@ -291,7 +432,7 @@ class ExportService {
     sheet1.cell(CellIndex.indexByString('C4')).cellStyle = estiloCab;
 
     final filas = [
-      ['Total del día',       _dbl(data, 'total_dia'),     null],
+      [mensual ? 'Total del mes' : 'Total del día', _dbl(data, 'total_dia'), null],
       ['Ventas contado',      _dbl(data, 'total_ventas'),  _int(data, 'cantidad_ventas')],
       ['Cobros fiados',       _dbl(data, 'total_abonos'),  _int(data, 'cantidad_abonos')],
       ['Fiados generados',    _dbl(data, 'total_fiados'),  _int(data, 'cantidad_fiados')],
@@ -307,7 +448,6 @@ class ExportService {
       }
     }
 
-    // ── Hoja 2: Métodos de pago ───────────────────────────────────────────
     final metodos = (data['ventas_por_metodo'] as List?) ?? [];
     if (metodos.isNotEmpty) {
       final sheet2 = excel['Métodos de pago'];
@@ -327,7 +467,25 @@ class ExportService {
       }
     }
 
-    // ── Hoja 3: Productos vendidos ────────────────────────────────────────
+    final dias = (data['por_dia'] as List?) ?? [];
+    if (mensual && dias.isNotEmpty) {
+      final sheetDias = excel['Ventas por día'];
+      sheetDias.cell(CellIndex.indexByString('A1')).value = TextCellValue('Fecha');
+      sheetDias.cell(CellIndex.indexByString('B1')).value = TextCellValue('Ventas');
+      sheetDias.cell(CellIndex.indexByString('C1')).value = TextCellValue('Total');
+      for (final col in ['A1', 'B1', 'C1']) {
+        sheetDias.cell(CellIndex.indexByString(col)).cellStyle = estiloCab;
+      }
+
+      for (int i = 0; i < dias.length; i++) {
+        final d   = dias[i] as Map;
+        final row = 2 + i;
+        sheetDias.cell(CellIndex.indexByString('A$row')).value = TextCellValue(d['fecha']?.toString() ?? '');
+        sheetDias.cell(CellIndex.indexByString('B$row')).value = IntCellValue(_int(d, 'cantidad'));
+        sheetDias.cell(CellIndex.indexByString('C$row')).value = DoubleCellValue(_dbl(d, 'total'));
+      }
+    }
+
     final productos = (data['productos_vendidos'] as List?) ?? [];
     if (productos.isNotEmpty) {
       final sheet3 = excel['Productos vendidos'];
@@ -349,23 +507,19 @@ class ExportService {
       }
     }
 
-    // Guardar y compartir
     final bytes = excel.save();
     if (bytes == null) throw Exception('Error al generar el archivo Excel');
-
-    final dir  = await getTemporaryDirectory();
-    final file = File('${dir.path}/resumen_${_dateToStr(fecha)}.xlsx');
-    await file.writeAsBytes(bytes);
-
-    await Share.shareXFiles(
-      [XFile(file.path, mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')],
-      subject: 'Resumen ${_labelFecha(fecha)}',
-    );
+    await guardarArchivo(bytes, '${_nombreResumen(fecha, mensual)}.xlsx', _mimeExcel);
   }
 
-  // ── Helpers ───────────────────────────────────────────────────────────────
   double _dbl(Map d, String k) => (d[k] as num?)?.toDouble() ?? 0;
   int    _int(Map d, String k) => (d[k] as num?)?.toInt()    ?? 0;
+
+  String _nombreResumen(DateTime fecha, bool mensual) {
+    final mes = fecha.month.toString().padLeft(2, '0');
+    if (mensual) return 'resumen_mensual_${fecha.year}-$mes';
+    return 'resumen_${_dateToStr(fecha)}';
+  }
 
   String _dateToStr(DateTime d) =>
       '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
@@ -373,6 +527,11 @@ class ExportService {
   String _labelFecha(DateTime f) {
     const m = ['','Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
     return '${f.day} ${m[f.month]} ${f.year}';
+  }
+
+  String _labelMes(DateTime f) {
+    const m = ['','Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+    return '${m[f.month]} ${f.year}';
   }
 
   String _labelFechaCompleta(DateTime f) {
@@ -385,5 +544,20 @@ class ExportService {
     if (v >= 1000000) return '${(v / 1000000).toStringAsFixed(2)}M';
     if (v >= 1000)    return '${(v / 1000).toStringAsFixed(1)}K';
     return v.toStringAsFixed(0);
+  }
+
+  String _textoCelda(Object valor) {
+    if (valor is num) return _miles(valor);
+    return valor.toString();
+  }
+
+  String _miles(num valor) {
+    final texto = valor.round().toString();
+    final resultado = StringBuffer();
+    for (int i = 0; i < texto.length; i++) {
+      if (i > 0 && (texto.length - i) % 3 == 0) resultado.write('.');
+      resultado.write(texto[i]);
+    }
+    return resultado.toString();
   }
 }

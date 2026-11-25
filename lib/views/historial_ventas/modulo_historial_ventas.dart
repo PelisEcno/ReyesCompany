@@ -4,6 +4,8 @@
 
 import 'package:flutter/material.dart';
 import '../../services/database_service.dart';
+import '../../services/export_service.dart';
+import '../shared/exportar_hoja.dart';
 
 // ── Paleta ───────────────────────────────────────────────────────────────────
 const _cAccent  = Color(0xFF2563EB);
@@ -130,6 +132,67 @@ class _ModuloHistorialVentasState extends State<ModuloHistorialVentas> {
     await _cargar(resetear: false);
   }
 
+  void _mensaje(String texto, Color color) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(texto, style: const TextStyle(color: Colors.white)),
+      backgroundColor: color,
+      behavior: SnackBarBehavior.floating,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+    ));
+  }
+
+  String _textoFecha(DateTime f) =>
+      '${f.year}-${f.month.toString().padLeft(2, '0')}-${f.day.toString().padLeft(2, '0')}';
+
+  void _exportar() {
+    mostrarExportacion(
+      context,
+      titulo: 'Exportar historial de ventas',
+      descripcion: 'Se exportan todos los registros que coinciden con los filtros activos.',
+      alElegir: (formato) async {
+        try {
+          final lista = await _svc.getHistorialVentasFiltrado(
+            idSucursal: widget.idSucursal,
+            fechaDesde: _fechaDesde,
+            fechaHasta: _fechaHasta,
+            tipo:       _filtroTipo  == 'Todos' ? null : _filtroTipo.toLowerCase(),
+            metodo:     _filtroMetodo == 'Todos' ? null : _filtroMetodo,
+            busqueda:   _busqueda.isEmpty ? null : _busqueda,
+            limite:     100000,
+            offset:     0,
+          );
+          if (lista.isEmpty) {
+            _mensaje('No hay registros para exportar con esos filtros', _cRed);
+            return;
+          }
+          final desde = _fechaDesde != null ? _textoFecha(_fechaDesde!) : 'inicio';
+          final hasta = _fechaHasta != null ? _textoFecha(_fechaHasta!) : 'hoy';
+          await ExportService.instance.exportarTabla(
+            titulo: 'Historial de ventas',
+            subtitulo: 'Desde $desde hasta $hasta · ${lista.length} registros',
+            encabezados: ['Fecha', 'Tipo', 'Cliente', 'Método', 'Usuario', 'Sucursal', 'Productos', 'Monto'],
+            filas: lista.map<List<Object>>((m) => [
+              m['fecha'].toString(),
+              m['tipo'].toString(),
+              m['cliente'].toString(),
+              m['metodo'].toString(),
+              m['usuario'].toString(),
+              m['sucursal'].toString(),
+              (m['productos'] as List).map((p) => '${p['cantidad']} x ${p['nombre']}').join(', '),
+              (m['monto'] as num).toDouble(),
+            ]).toList(),
+            formato: formato,
+            nombreArchivo: 'historial_ventas_${_textoFecha(DateTime.now())}',
+          );
+          _mensaje('Historial exportado como $formato', _cGreen);
+        } catch (e) {
+          _mensaje('Error al exportar: ${e.toString().replaceFirst('Exception: ', '')}', _cRed);
+        }
+      },
+    );
+  }
+
   // ── Filtros ───────────────────────────────────────────────────────────────
   void _aplicarBusqueda(String q) {
     setState(() => _busqueda = q);
@@ -251,6 +314,13 @@ class _ModuloHistorialVentasState extends State<ModuloHistorialVentas> {
             label:   _filtroMetodo == 'Todos' ? 'Método' : _filtroMetodo,
             opciones: const ['Todos', 'Efectivo', 'Nequi', 'Daviplata', 'Fiado'],
             onSelected: (v) { setState(() => _filtroMetodo = v); _cargar(); },
+          ),
+          const SizedBox(width: 8),
+          _chipFiltro(
+            label:  'Exportar',
+            activo: false,
+            icono:  Icons.download_rounded,
+            onTap:  _exportar,
           ),
           if (_hayFiltrosActivos) ...[
             const SizedBox(width: 8),

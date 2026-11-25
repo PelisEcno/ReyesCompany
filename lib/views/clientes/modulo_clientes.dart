@@ -1,6 +1,9 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../services/database_service.dart';
+import '../../services/export_service.dart';
 import '../../models/models.dart';
+import '../shared/exportar_hoja.dart';
 
 const _primary = Color(0xFF1A5276);
 const _accent  = Color(0xFF2E86C1);
@@ -12,7 +15,8 @@ const _bg      = Color(0xFFF0F4F8);
 class ModuloClientes extends StatefulWidget {
   final String idUsuario;
   final String idSucursal;
-  const ModuloClientes({super.key, required this.idUsuario, required this.idSucursal});
+  final bool puedeExportar;
+  const ModuloClientes({super.key, required this.idUsuario, required this.idSucursal, this.puedeExportar = false});
   @override
   State<ModuloClientes> createState() => _ModuloClientesState();
 }
@@ -24,16 +28,56 @@ class _ModuloClientesState extends State<ModuloClientes> {
   bool   _cargando = true;
   String _busqueda = "";
 
-  @override
-  void initState() { super.initState(); _cargarClientes(); }
+  Timer? _refresco;
 
-  Future<void> _cargarClientes() async {
-    setState(() => _cargando = true);
+  @override
+  void initState() {
+    super.initState();
+    _cargarClientes();
+    _refresco = Timer.periodic(const Duration(seconds: 30), (_) => _cargarClientes(silencioso: true));
+  }
+
+  @override
+  void dispose() {
+    _refresco?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _cargarClientes({bool silencioso = false}) async {
+    if (!silencioso) setState(() => _cargando = true);
     try {
       final lista = await _svc.getClientes(idSucursal: widget.idSucursal);
+      if (!mounted) return;
       setState(() { _clientes = lista; _aplicarFiltro(); });
-    } catch (e) { _snack("Error: $e", _danger); }
-    finally { setState(() => _cargando = false); }
+    } catch (e) { if (!silencioso) _snack("Error: $e", _danger); }
+    finally { if (mounted && !silencioso) setState(() => _cargando = false); }
+  }
+
+  String _fechaArchivo() {
+    final n = DateTime.now();
+    return '${n.year}-${n.month.toString().padLeft(2, '0')}-${n.day.toString().padLeft(2, '0')}';
+  }
+
+  void _exportar() {
+    if (_filtrados.isEmpty) { _snack("No hay clientes para exportar", _danger); return; }
+    mostrarExportacion(
+      context,
+      titulo: "Exportar clientes",
+      descripcion: "Elige el formato para exportar la lista de clientes con su saldo pendiente.",
+      alElegir: (formato) async {
+        try {
+          await ExportService.instance.exportarTabla(
+            titulo: "Clientes y saldos pendientes",
+            subtitulo: "${_filtrados.length} clientes",
+            encabezados: ["Cliente", "Teléfono", "Dirección", "Saldo pendiente"],
+            filas: _filtrados.map<List<Object>>((c) => [c.nombre, c.telefono, c.direccion, c.saldoPendiente]).toList(),
+            formato: formato,
+            nombreArchivo: "clientes_${_fechaArchivo()}",
+          );
+          _snack("Clientes exportados como $formato", _success);
+        } catch (e) { _snack("Error al exportar: ${e.toString().replaceFirst('Exception: ', '')}", _danger); }
+      },
+    );
   }
 
   Future<void> _guardar(Map<String, dynamic> datos, {String? idEditar}) async {
@@ -419,6 +463,17 @@ class _ModuloClientesState extends State<ModuloClientes> {
                 side: BorderSide(color: Colors.grey[200]!), backgroundColor: Colors.white),
             child: const Icon(Icons.refresh_rounded, color: _accent, size: 18),
           )),
+          if (widget.puedeExportar) ...[
+            const SizedBox(width: 8),
+            Tooltip(message: "Exportar clientes", child: SizedBox(height: 42, width: 42, child: OutlinedButton(
+              onPressed: _exportar,
+              style: OutlinedButton.styleFrom(
+                  padding: EdgeInsets.zero,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  side: BorderSide(color: Colors.grey[200]!), backgroundColor: Colors.white),
+              child: const Icon(Icons.download_rounded, color: _accent, size: 18),
+            ))),
+          ],
         ]),
         const SizedBox(height: 12),
 

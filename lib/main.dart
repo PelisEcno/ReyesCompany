@@ -1,23 +1,7 @@
-// ══════════════════════════════════════════════════════
-//  main.dart — ReyesCompany SIV v3.0
-//  Auto-login: si hay sesión activa salta el login
-// ══════════════════════════════════════════════════════
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
-import 'core/config/firebase_options.dart';
 import 'views/auth/login_screen.dart';
-import 'views/dashboard/dashboard.dart';
-import 'services/database_service.dart';
-// import 'seed_screen.dart'; // Descomentar solo para inicializar
 
-void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-  try {
-    await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
-  } catch (_) {
-    // Ya inicializado (hot restart en Android)
-  }
+void main() {
   runApp(const ReyesCompanyApp());
 }
 
@@ -40,10 +24,6 @@ class ReyesCompanyApp extends StatelessWidget {
   }
 }
 
-// ── SplashScreen ─────────────────────────────────────
-// Muestra el logo mientras verifica si hay sesión activa.
-// Si hay sesión → va directo al Dashboard.
-// Si no hay sesión → va al Login.
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
   @override
@@ -62,48 +42,13 @@ class _SplashScreenState extends State<SplashScreen>
     _fade  = Tween<double>(begin: 0, end: 1).animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeIn));
     _scale = Tween<double>(begin: 0.7, end: 1).animate(CurvedAnimation(parent: _ctrl, curve: Curves.elasticOut));
     _ctrl.forward();
-    _verificarSesion();
+    _irAlLogin();
   }
 
-  Future<void> _verificarSesion() async {
+  Future<void> _irAlLogin() async {
     await Future.delayed(const Duration(milliseconds: 1500));
     if (!mounted) return;
-
-    try {
-      final user = FirebaseAuth.instance.currentUser;
-      debugPrint('=== SPLASH: currentUser = ${user?.uid ?? "null"}');
-
-      if (user == null) {
-        Navigator.pushReplacementNamed(context, '/login');
-        return;
-      }
-
-      final svc  = DatabaseService();
-      final snap = await svc.getUserProfile(user.uid);
-      debugPrint('=== SPLASH: perfil = $snap');
-
-      if (!mounted) return;
-      if (snap == null) {
-        await FirebaseAuth.instance.signOut();
-        Navigator.pushReplacementNamed(context, '/login');
-        return;
-      }
-
-      Navigator.pushReplacement(context, MaterialPageRoute(
-        builder: (_) => DashboardScreen(
-          usuario: UsuarioSesion(
-            idUsuario:      snap['id_usuario'],
-            nombre:         snap['nombre'],
-            rol:            snap['rol'],
-            idSucursal:     snap['id_sucursal'],
-            sucursalNombre: snap['sucursal_nombre'] ?? '',
-          ),
-        ),
-      ));
-    } catch (e) {
-      debugPrint('=== SPLASH ERROR: $e');
-      if (mounted) Navigator.pushReplacementNamed(context, '/login');
-    }
+    Navigator.pushReplacementNamed(context, '/login');
   }
 
   @override

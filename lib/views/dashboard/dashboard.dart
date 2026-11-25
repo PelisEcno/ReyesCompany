@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../services/database_service.dart';
 import '../../models/models.dart';
@@ -220,10 +221,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ])),
         IconButton(
             icon: Icon(Icons.logout_rounded, color: Colors.white.withOpacity(0.4), size: 18),
-            onPressed: () async {
-              await DatabaseService().logout();
-              Navigator.pushReplacementNamed(context, '/login');
-            }),
+            onPressed: () => Navigator.pushReplacementNamed(context, '/login')),
       ])),
     ]),
   );
@@ -330,12 +328,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
           idSucursal: sucFiltro ?? (_sucursales.isNotEmpty ? _sucursales.first.idSucursal : ''));
       case 2: return ModuloInventario(
           key:          ValueKey('inventario_$sucKey'),
+          idUsuario:    widget.usuario.idUsuario,
           idSucursal:   sucFiltro,
           esAdminGlobal: widget.usuario.esAdminGlobal);
       case 3: return ModuloClientes(
           key:        ValueKey('clientes_$sucKey'),
           idUsuario:  widget.usuario.idUsuario,
-          idSucursal: sucFiltro ?? 'sucursal_1');
+          idSucursal: sucFiltro ?? '',
+          puedeExportar: widget.usuario.rol == 'Administrador');
       case 4: return ModuloUsuarios(
           key:              ValueKey('usuarios_$sucKey'),
           idUsuarioActual:  widget.usuario.idUsuario,
@@ -402,9 +402,20 @@ class _ModuloInicioState extends State<ModuloInicio> {
   final _svc = DatabaseService();
   bool _cargando = true;
   Map<String, dynamic> _data = {};
+  Timer? _refresco;
 
   @override
-  void initState() { super.initState(); _cargar(); }
+  void initState() {
+    super.initState();
+    _cargar();
+    _refresco = Timer.periodic(const Duration(seconds: 30), (_) => _cargar(silencioso: true));
+  }
+
+  @override
+  void dispose() {
+    _refresco?.cancel();
+    super.dispose();
+  }
 
   @override
   void didUpdateWidget(ModuloInicio old) {
@@ -412,13 +423,14 @@ class _ModuloInicioState extends State<ModuloInicio> {
     if (old.idSucursal != widget.idSucursal) _cargar();
   }
 
-  Future<void> _cargar() async {
-    setState(() => _cargando = true);
+  Future<void> _cargar({bool silencioso = false}) async {
+    if (!silencioso) setState(() => _cargando = true);
     try {
       final d = await _svc.getResumenDia(idSucursal: widget.idSucursal);
+      if (!mounted) return;
       setState(() => _data = d);
     } catch (_) {}
-    finally { if (mounted) setState(() => _cargando = false); }
+    finally { if (mounted && !silencioso) setState(() => _cargando = false); }
   }
 
   @override
