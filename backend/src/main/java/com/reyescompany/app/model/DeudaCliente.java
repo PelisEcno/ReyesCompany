@@ -8,11 +8,15 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import lombok.Getter;
+import lombok.Setter;
 
 import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "deuda_cliente")
+@Getter
+@Setter
 public class DeudaCliente {
 
     @Id
@@ -33,44 +37,4 @@ public class DeudaCliente {
     @ManyToOne
     @JoinColumn(name = "id_venta", nullable = false)
     private Venta venta;
-
-    public Integer getIdDeudaCliente() {
-        return idDeudaCliente;
-    }
-
-    public void setIdDeudaCliente(Integer idDeudaCliente) {
-        this.idDeudaCliente = idDeudaCliente;
-    }
-
-    public LocalDateTime getFechaDeuda() {
-        return fechaDeuda;
-    }
-
-    public void setFechaDeuda(LocalDateTime fechaDeuda) {
-        this.fechaDeuda = fechaDeuda;
-    }
-
-    public LocalDateTime getUpdatedAt() {
-        return updatedAt;
-    }
-
-    public void setUpdatedAt(LocalDateTime updatedAt) {
-        this.updatedAt = updatedAt;
-    }
-
-    public Cliente getCliente() {
-        return cliente;
-    }
-
-    public void setCliente(Cliente cliente) {
-        this.cliente = cliente;
-    }
-
-    public Venta getVenta() {
-        return venta;
-    }
-
-    public void setVenta(Venta venta) {
-        this.venta = venta;
-    }
 }

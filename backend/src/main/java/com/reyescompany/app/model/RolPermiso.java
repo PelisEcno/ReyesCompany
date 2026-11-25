@@ -8,9 +8,13 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import lombok.Getter;
+import lombok.Setter;
 
 @Entity
 @Table(name = "rol_permiso")
+@Getter
+@Setter
 public class RolPermiso {
 
     @Id
@@ -25,28 +29,4 @@ public class RolPermiso {
     @ManyToOne
     @JoinColumn(name = "id_permiso", nullable = false)
     private Permiso permiso;
-
-    public Integer getIdRolPermiso() {
-        return idRolPermiso;
-    }
-
-    public void setIdRolPermiso(Integer idRolPermiso) {
-        this.idRolPermiso = idRolPermiso;
-    }
-
-    public Rol getRol() {
-        return rol;
-    }
-
-    public void setRol(Rol rol) {
-        this.rol = rol;
-    }
-
-    public Permiso getPermiso() {
-        return permiso;
-    }
-
-    public void setPermiso(Permiso permiso) {
-        this.permiso = permiso;
-    }
 }

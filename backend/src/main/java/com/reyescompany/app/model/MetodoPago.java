@@ -6,9 +6,13 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import lombok.Getter;
+import lombok.Setter;
 
 @Entity
 @Table(name = "metodo_pago")
+@Getter
+@Setter
 public class MetodoPago {
 
     @Id
@@ -21,28 +25,4 @@ public class MetodoPago {
 
     @Column(nullable = false)
     private Boolean activo = true;
-
-    public Integer getIdMetodoPago() {
-        return idMetodoPago;
-    }
-
-    public void setIdMetodoPago(Integer idMetodoPago) {
-        this.idMetodoPago = idMetodoPago;
-    }
-
-    public String getNombre() {
-        return nombre;
-    }
-
-    public void setNombre(String nombre) {
-        this.nombre = nombre;
-    }
-
-    public Boolean getActivo() {
-        return activo;
-    }
-
-    public void setActivo(Boolean activo) {
-        this.activo = activo;
-    }
 }
